@@ -45,15 +45,16 @@ function Publish-GuestConfigurationPackage {
 
         $ErrorActionPreference = 'Stop'
         $configurationFile = Get-Item -Path $Configuration
-        $configurationName = Get-Content -Path $configurationFile.FullName -ErrorAction Stop | Select-String -Pattern 'Configuration\s+(\w+)' | ForEach-Object { $_.Matches.Groups[1].Value }
-        Write-Verbose "Extracted configuration name: $($configurationName)"
-        if (-not $configurationName) {
-            throw "Failed to extract configuration name from configuration file: $($configurationFile.FullName)"
-        }
-        
-        if ($configurationName.Count -gt 1) {
+        $configurations = Get-Content -Path $configurationFile.FullName -ErrorAction Stop | Select-String -Pattern 'Configuration\s+(\w+)' -AllMatches
+        if ($configurations.Matches.Count -gt 1) {
             throw "Found multiple configurations in configuration file: $($configurationFile.FullName)"
         }
+        if ($configurations.Matches.Groups.Count -lt 1) {
+            throw "Failed to detect any configurations in configuration file: $($configurationFile.FullName)"
+        }
+
+        $configurationName = $configurations.Matches.Groups[1].Value
+        Write-Verbose "Extracted configuration name: $($configurationName)"
 
         $ConfigurationMofFile = Join-Path -Path $pwd -ChildPath "$configurationName" -AdditionalChildPath "$configurationName.mof"
         Write-Verbose "Configuration MOF file: $($ConfigurationMofFile)"
@@ -63,7 +64,7 @@ function Publish-GuestConfigurationPackage {
         $mofFile = . $configurationFile.FullName -ErrorAction Stop
         if (-not (Test-Path -Path $mofFile.FullName -PathType Leaf -ErrorAction SilentlyContinue)) {
             throw "Failed to generate MOF file from configuration file: $($configurationFile.FullName)"
-        }
+        }   
         else {
             Write-Verbose "Generated MOF file: $($mofFile.FullName)"
         }
@@ -72,23 +73,23 @@ function Publish-GuestConfigurationPackage {
         Rename-Item -Path $mofFile.FullName -NewName "$($configurationName).mof" -ErrorAction Stop
 
         Write-Verbose "Creating package for configuration '$configurationName'..."
-        $configuationPackage = New-GuestConfigurationPackage -Name $configurationName -Configuration $ConfigurationMofFile -Path $OutputFolder -Type AuditAndSet -Force
-        if (-not (Test-Path -Path $configuationPackage.Path -PathType Leaf -ErrorAction SilentlyContinue)) {
+        $configurationPackage = New-GuestConfigurationPackage -Name $configurationName -Configuration $ConfigurationMofFile -Path $OutputFolder -Type AuditAndSet -Force
+        if (-not (Test-Path -Path $configurationPackage.Path -PathType Leaf -ErrorAction SilentlyContinue)) {
             throw "Failed to create package for configuration: $($configurationFile.BaseName)"
         }
         else {
-            Write-Verbose "Created package for configuration: $($configuationPackage.Path)"
+            Write-Verbose "Created package for configuration: $($configurationPackage.Path)"
         }
 
         @{
             ConfigurationName     = $configurationName
-            ConfigurationPackage  = $configuationPackage.Path
-            ConfigurationFileHash = (Get-FileHash -Path $configuationPackage.Path -Algorithm SHA256).Hash
+            ConfigurationPackage  = $configurationPackage.Path
+            ConfigurationFileHash = (Get-FileHash -Path $configurationPackage.Path -Algorithm SHA256).Hash
         }
     }
     
     end {
-        if (-not $NoCleanup) {
+        if ($PSCmdlet.ParameterSetName -ne 'Debug') {
             Write-Verbose 'Cleaning up...'
             Remove-Item -Path "$pwd\$configurationName" -ErrorAction SilentlyContinue -Force -Recurse
         }

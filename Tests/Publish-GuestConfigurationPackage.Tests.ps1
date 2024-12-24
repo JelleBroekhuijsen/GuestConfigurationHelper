@@ -2,10 +2,30 @@ BeforeAll {
     . $PSScriptRoot\..\Public\Publish-GuestConfigurationPackage.ps1
 }
 
-Describe 'invoking Publish-GuestConfigurationPackage with minimal parameters' {
+Describe 'Invoking Publish-GuestConfigurationPackage with minimal parameters' {
     Context 'testing parameter validation' {
         It 'should throw an error if the input provided for $Configuration is not a valid path' {
             { Publish-GuestConfigurationPackage -Configuration .\absentfile.ps1 } | Should -Throw "Cannot validate argument on parameter 'Configuration'. The `" Test-Path -Path `$_ -PathType Leaf `" validation script for the argument with value `".\absentfile.ps1`" did not return a result of True.*"
+        }
+    }
+    Context 'validating results' {
+        BeforeAll {
+            $result = Publish-GuestConfigurationPackage -Configuration "$pwd\Tests\SampleConfigs\SimpleDscConfiguration.ps1"
+        }
+        It 'should create a GuestConfigurationPackage in the current directory with the same name as the configuration' {
+            Test-Path -Path .\SimpleDscConfiguration.zip -PathType Leaf | Should -Be $true
+        }
+        It 'should return the path to the created GuestConfigurationPackage' {
+            $result.ConfigurationPackage | Should -Be "$pwd\SimpleDscConfiguration.zip"
+        }
+        It 'should output the name of the configuration' {
+            $result.ConfigurationName | Should -Be 'SimpleDscConfiguration'
+        }
+        It 'should output a file hash of the created GuestConfigurationPackage' {
+            $result.ConfigurationFileHash | Should -Not -BeNullOrEmpty
+        }
+        AfterEach {
+            Remove-Item -Path "$pwd\SimpleDscConfiguration.zip" -Force -ErrorAction SilentlyContinue
         }
     }
     Context 'testing cmdlet invocation' {
@@ -54,23 +74,25 @@ Describe 'invoking Publish-GuestConfigurationPackage with minimal parameters' {
             Remove-Item -Path "$pwd\SimpleDscConfiguration.zip" -Force -ErrorAction SilentlyContinue
         }
     }
-    Context 'validating results' {
-        BeforeAll {
-            $result = Publish-GuestConfigurationPackage -Configuration "$pwd\Tests\SampleConfigs\SimpleDscConfiguration.ps1"
+    Context 'testing error handling' {
+        It 'should throw an error if it finds multiple configurations in the configuration file' {
+            Mock Get-Content { return 'Configuration SimpleDscConfiguration {} Configuration AnotherConfiguration {}' }
+            { Publish-GuestConfigurationPackage -Configuration "$pwd\Tests\SampleConfigs\SimpleDscConfiguration.ps1" } | Should -Throw "Found multiple configurations in configuration file: *"
         }
-        It 'should create a GuestConfigurationPackage in the current directory with the same name as the configuration' {
-            Test-Path -Path .\SimpleDscConfiguration.zip -PathType Leaf | Should -Be $true
+        It 'should throw an error if it fails to detect configurations in the configuration file' {
+            Mock Get-Content {}
+            { Publish-GuestConfigurationPackage -Configuration "$pwd\Tests\SampleConfigs\SimpleDscConfiguration.ps1" } | Should -Throw  "Failed to detect any configurations in configuration file: *"
         }
-        It 'should return the path to the created GuestConfigurationPackage' {
-            $result.ConfigurationPackage | Should -Be "$pwd\SimpleDscConfiguration.zip"
+        It 'should throw an error if it fails to generate a MOF file from the configuration file' {
+            Mock Test-Path -ParameterFilter { $Path -like "*localhost.mof" } { return $false }
+            { Publish-GuestConfigurationPackage -Configuration "$pwd\Tests\SampleConfigs\SimpleDscConfiguration.ps1" } | Should -Throw "Failed to generate MOF file from configuration file: *"
         }
-        It 'should output the name of the configuration' {
-            $result.ConfigurationName | Should -Be 'SimpleDscConfiguration'
-        }
-        It 'should output a file hash of the created GuestConfigurationPackage' {
-            $result.ConfigurationFileHash | Should -Not -BeNullOrEmpty
+        It 'should throw an error if it fails to create the GuestConfigurationPackage' {
+            Mock New-GuestConfigurationPackage { return $null }
+            { Publish-GuestConfigurationPackage -Configuration "$pwd\Tests\SampleConfigs\SimpleDscConfiguration.ps1" } | Should -Throw "Failed to create package for configuration: SimpleDscConfiguration"
         }
         AfterEach {
+            Remove-Item -Path "$pwd\SimpleDscConfiguration" -Force -ErrorAction SilentlyContinue -Recurse
             Remove-Item -Path "$pwd\SimpleDscConfiguration.zip" -Force -ErrorAction SilentlyContinue
         }
     }
