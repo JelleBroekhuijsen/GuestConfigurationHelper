@@ -1,7 +1,28 @@
 function Publish-GuestConfigurationPackage {
     <#
     .SYNOPSIS 
-    
+        Creates a GuestConfigurationPackage from a DSC configuration file.
+
+    .DESCRIPTION
+        This function creates a GuestConfigurationPackage from a DSC configuration file. The function extracts the configuration name from the configuration file and generates a MOF file from the configuration file. The function then creates a GuestConfigurationPackage using the New-GuestConfigurationPackage cmdlet.
+
+    .PARAMETER Configuration
+        The path to the DSC configuration file.
+
+    .PARAMETER OutputFolder
+        The path to the folder where the GuestConfigurationPackage will be created. The default value is the current directory.
+
+    .PARAMETER NoCleanup
+        Indicates whether to clean up the temporary files created during the process. Default behavior is to clean up the temporary files.
+
+    .EXAMPLE
+        Publish-GuestConfigurationPackage -Configuration .\SimpleDscConfiguration.ps1
+
+    .EXAMPLE
+        Publish-GuestConfigurationPackage -Configuration .\SimpleDscConfiguration.ps1 -OutputFolder .\Output
+
+    .EXAMPLE
+        Publish-GuestConfigurationPackage -Configuration .\SimpleDscConfiguration.ps1 -NoCleanup
     #>
     [CmdletBinding()]
     param (
@@ -51,18 +72,24 @@ function Publish-GuestConfigurationPackage {
         Rename-Item -Path $mofFile.FullName -NewName "$($configurationName).mof" -ErrorAction Stop
 
         Write-Verbose "Creating package for configuration '$configurationName'..."
-        $config = New-GuestConfigurationPackage -Name $configurationName -Configuration $ConfigurationMofFile -Path $OutputFolder -Type AuditAndSet -Force
-        if (-not (Test-Path -Path $config.Path -PathType Leaf -ErrorAction SilentlyContinue)) {
+        $configuationPackage = New-GuestConfigurationPackage -Name $configurationName -Configuration $ConfigurationMofFile -Path $OutputFolder -Type AuditAndSet -Force
+        if (-not (Test-Path -Path $configuationPackage.Path -PathType Leaf -ErrorAction SilentlyContinue)) {
             throw "Failed to create package for configuration: $($configurationFile.BaseName)"
         }
         else {
-            Write-Verbose "Created package for configuration: $($config.Path)"
+            Write-Verbose "Created package for configuration: $($configuationPackage.Path)"
+        }
+
+        @{
+            ConfigurationName     = $configurationName
+            ConfigurationPackage  = $configuationPackage.Path
+            ConfigurationFileHash = (Get-FileHash -Path $configuationPackage.Path -Algorithm SHA256).Hash
         }
     }
     
     end {
-        if(-not $NoCleanup) {
-            Write-Verbose "Cleaning up..."
+        if (-not $NoCleanup) {
+            Write-Verbose 'Cleaning up...'
             Remove-Item -Path "$pwd\$configurationName" -ErrorAction SilentlyContinue -Force -Recurse
         }
     }
