@@ -98,6 +98,72 @@ Describe 'Invoking Publish-GuestConfigurationPackage with minimal parameters' {
     }
 }
 
-AfterAll {
+Describe 'Invoking Publish-GuestConfigurationPackage with the output folder parameter' {
+    Context 'testing parameter validation' {
+        It 'should throw an error if the specified output folder does not exist' {
+            { Publish-GuestConfigurationPackage -Configuration "$pwd\Tests\SampleConfigs\SimpleDscConfiguration.ps1" -OutputFolder 'C:\NonExistentFolder' } | Should -Throw "Cannot validate argument on parameter 'OutputFolder'. The `" Test-Path -Path `$_ -PathType Container `" validation script for the argument with value `"C:\NonExistentFolder`" did not return a result of True.*"
+        }
+    }
+    Context 'validating results' {
+        BeforeAll {
+            $result = Publish-GuestConfigurationPackage -Configuration "$pwd\Tests\SampleConfigs\SimpleDscConfiguration.ps1" -OutputFolder "$pwd\Tests\SampleConfigs"
+        }
+        It 'should create a GuestConfigurationPackage in the target directory with the same name as the configuration' {
+            Test-Path -Path "$pwd\Tests\SampleConfigs\SimpleDscConfiguration.zip" -PathType Leaf | Should -Be $true
+        }
+        It 'should return the path to the created GuestConfigurationPackage' {
+            $result.ConfigurationPackage | Should -Be "$pwd\Tests\SampleConfigs\SimpleDscConfiguration.zip"
+        }
+        AfterEach {
+            Remove-Item -Path "$pwd\Tests\SampleConfigs\SimpleDscConfiguration.zip" -Force -ErrorAction SilentlyContinue
+        }
+    }
+    Context 'testing cmdlet invocation' {
+        BeforeEach {
+            $outputFolder = "$pwd\Tests\SampleConfigs"
+            Mock New-GuestConfigurationPackage { return @{Path = "$outputFolder\SimpleDscConfiguration.zip" } }
+            Mock Test-Path { return $true }
+            Mock Get-FileHash {}
+            Publish-GuestConfigurationPackage -Configuration "$pwd\Tests\SampleConfigs\SimpleDscConfiguration.ps1" -OutputFolder $outputFolder
+        }
 
+        It 'should call New-GuestConfigurationPackage to create the package' {
+            Should -CommandName New-GuestConfigurationPackage -Exactly 1 -ParameterFilter { $Name -eq 'SimpleDscConfiguration' -and $Configuration -like '*\SimpleDscConfiguration\SimpleDscConfiguration.mof' -and $Path -like '*\Tests\SampleConfigs' }
+        }
+
+        AfterEach {
+            Remove-Item -Path "$pwd\SimpleDscConfiguration" -Force -ErrorAction SilentlyContinue -Recurse
+        }
+    }
 }
+
+Describe 'Invoking Publish-GuestConfigurationPackage with the NoCleanup switch' {
+    Context 'validating results' {
+        BeforeAll {
+            $result = Publish-GuestConfigurationPackage -Configuration "$pwd\Tests\SampleConfigs\SimpleDscConfiguration.ps1" -NoCleanup
+        }
+        It 'should leave the temporary files in place' {
+            Test-Path -Path "$pwd\SimpleDscConfiguration" -PathType Container | Should -Be $true
+            Test-Path -Path "$pwd\SimpleDscConfiguration\SimpleDscConfiguration.mof" -PathType Leaf | Should -Be $true
+        }
+        AfterEach {
+            Remove-Item -Path "$pwd\SimpleDscConfiguration.zip" -Force -ErrorAction SilentlyContinue
+            Remove-Item -Path "$pwd\SimpleDscConfiguration" -Force -ErrorAction SilentlyContinue -Recurse
+        }
+    }
+    Context 'testing cmdlet invocation' {
+        BeforeEach {
+            Mock Remove-Item {}
+            Publish-GuestConfigurationPackage -Configuration "$pwd\Tests\SampleConfigs\SimpleDscConfiguration.ps1" -NoCleanup
+        }
+
+        It 'should not call Remove-Item to clean up the temporary files' {
+            Should -CommandName Remove-Item -Exactly 0
+        }
+
+        AfterEach {
+            Remove-Item -Path "$pwd\SimpleDscConfiguration.zip" -Force -ErrorAction SilentlyContinue
+            Remove-Item -Path "$pwd\SimpleDscConfiguration" -Force -ErrorAction SilentlyContinue -Recurse
+        }
+    }
+}	
