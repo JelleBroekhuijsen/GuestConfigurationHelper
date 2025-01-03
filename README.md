@@ -23,6 +23,8 @@ Publish-GuestConfigurationPackage -Configuration "C:\path\to\your\configuration.
 
 ## Release History
 
+- 1.0.0 - Initial release
+
 ## Roadmap
 
 - [ ] Add support for uploading Guest Configuration packages to Azure Storage Accounts
