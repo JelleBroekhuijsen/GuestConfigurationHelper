@@ -63,7 +63,7 @@ function Publish-GuestConfigurationPackage {
 
         $ErrorActionPreference = 'Stop'
         $configurationFile = Get-Item -Path $Configuration
-        $configurations = Get-Content -Path $configurationFile.FullName -ErrorAction Stop | Select-String -Pattern 'Configuration\s+(\w+)' -AllMatches
+        $configurations = Get-Content -Path $configurationFile.FullName -ErrorAction Stop | Select-String -Pattern '^Configuration\s+(\w+)' -AllMatches
         if ($configurations.Matches.Count -gt 1) {
             throw "Found multiple configurations in configuration file: $($configurationFile.FullName)"
         }
