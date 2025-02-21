@@ -23,6 +23,13 @@ Install-Module -Name GuestConfigurationHelper
 Publish-GuestConfigurationPackage -Configuration "C:\path\to\your\configuration.ps1" 
 ```
 
+### [EXPERIMENTAL] Reduce dependency size of Guest Configuration packages
+
+When creating a Guest Configuration package, all required dependencies are included automatically. This includes dependencies of dependencies. This can lead to very large packages. 
+
+For example:  
+Your config has a dependency on `Az.Accounts` and `Az.Storage`; as `Az.Storage` also has a dependency on `Az.Accounts`, the specific version of `Az.Accounts` that `Az.Storage` depends on is included in the package in a versioned folder of that module. To 'fix' this behavior, this feature removes all versioned folders of modules that are included in the package.
+
 ## Release History
 
 - 1.0.0 - Initial release
