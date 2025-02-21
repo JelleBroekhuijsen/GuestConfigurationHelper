@@ -9,8 +9,10 @@ Describe 'Invoking Test-ConfigurationFileSizeOnDisk with minimal parameters' {
     }
   }
   Context 'testing cmdlet invocation' {
-    It 'should remove all folders matching the regex pattern from the Modules folder' {
+    BeforeEach{
       New-Item -Path "$pwd\Modules" -ItemType Directory
+    }
+    It 'should remove all folders matching the regex pattern from the Modules folder' {
       Mock Get-ChildItem { return @(
           @{
             Name = '1.0.0'
