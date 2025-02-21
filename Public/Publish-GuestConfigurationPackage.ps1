@@ -113,7 +113,7 @@ function Publish-GuestConfigurationPackage {
         $stagingFolder = New-Item -Path "$pwd\staging" -ItemType Directory -ErrorAction Stop
         if($CompressConfiguration) {
             Test-ConfigurationFileSizeOnDisk -ConfigurationPackage $configurationPackage.Path -StagingFolder $stagingFolder.FullName -CompressConfiguration
-            Compress-Archive -Path $stagingFolder.FullName -DestinationPath $configurationPackage.Path -Force
+            Compress-Archive -Path "$($stagingFolder.FullName)\*" -DestinationPath $configurationPackage.Path -Force
         }
         else{
             Test-ConfigurationFileSizeOnDisk -ConfigurationPackage $configurationPackage.Path -StagingFolder $stagingFolder.FullName
