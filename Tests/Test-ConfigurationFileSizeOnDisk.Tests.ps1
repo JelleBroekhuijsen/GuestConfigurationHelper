@@ -56,9 +56,6 @@ Describe 'Invoking Test-ConfigurationFileSizeOnDisk with minimal parameters' {
         It 'should call Get-ChildItem' {
             Should -CommandName Get-ChildItem -Exactly 1
         }
-        It 'should call Remove-Item' {
-            Should -CommandName Remove-Item -Exactly 1
-        }
     }
     Context 'testing error handling' {
         It 'should throw an error if a folder with the configuration name already exists in the staging folder' {

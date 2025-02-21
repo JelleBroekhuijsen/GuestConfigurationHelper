@@ -41,6 +41,5 @@ function Test-ConfigurationFileSizeOnDisk {
     }
 
     end {
-        Remove-Item -Path $unzipFolder.FullName -Recurse -Force -ErrorAction SilentlyContinue
     }
 }
