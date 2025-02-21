@@ -40,20 +40,25 @@ function Publish-GuestConfigurationPackage {
     param (
         [Parameter(Mandatory)]
         [ValidateScript({ Test-Path -Path $_ -PathType Leaf })]
-        [string]$Configuration,
+        [string]
+        $Configuration,
 
         [Parameter()]
-        [hashtable]$ConfigurationParameters,
+        [hashtable]
+        $ConfigurationParameters,
 
         [Parameter()]
         [ValidateScript({ Test-Path -Path $_ -PathType Container })]
+        [string]
         $OutputFolder = $pwd.Path,
 
         [Parameter(ParameterSetName = 'Debug')]
-        [switch]$NoCleanup,
+        [switch]
+        $NoCleanup,
 
         [Parameter()]
-        [switch]$CompressConfiguration
+        [switch]
+        $CompressConfiguration
     )
     
     begin {

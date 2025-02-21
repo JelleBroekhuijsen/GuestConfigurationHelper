@@ -3,10 +3,12 @@ function Test-ConfigurationFileSizeOnDisk {
     param(
         [Parameter(Mandatory)]
         [ValidateScript({ Test-Path -Path $_ -PathType Leaf })]
-        [string]$ConfigurationPackage,
+        [string]
+        $ConfigurationPackage,
 
         [Parameter()]
         [ValidateScript({ Test-Path -Path $_ -PathType Container })]
+        [string]
         $StagingFolder = $pwd.Path,
 
         [Parameter()]

@@ -3,7 +3,8 @@ function Compress-ConfigurationFileSizeOnDisk {
   param (
     [Parameter(Mandatory)]
     [ValidateScript({ Test-Path -Path $_ -PathType Container })]
-    [string]$ExtractedConfigurationPackageFolder
+    [string]
+    $ExtractedConfigurationPackageFolder
   )
   
   begin {
