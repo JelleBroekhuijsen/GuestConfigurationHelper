@@ -27,7 +27,7 @@ function Test-ConfigurationFileSizeOnDisk {
         $unzipFolder = New-Item -Path $StagingFolder -Name $configurationPackageFile.BaseName -ItemType Directory -ErrorAction Stop
         
         Write-Verbose "Expanding configuration package: $($configurationPackageFile.FullName) to staging folder: $($stagingFolder.FullName)"
-        Expand-Archive -Path $configurationPackageFile.FullName -DestinationPath $unzipFolder.FullName -Force
+        Expand-Archive -Path $configurationPackageFile.FullName -DestinationPath "$($unzipFolder.FullName)\$($ConfigurationPackage.BaseName)" -Force
 
         if($CompressConfiguration) {
             Compress-ConfigurationFileSizeOnDisk -ExtractedConfigurationPackageFolder $unzipFolder.FullName
