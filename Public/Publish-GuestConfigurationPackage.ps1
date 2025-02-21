@@ -105,11 +105,12 @@ function Publish-GuestConfigurationPackage {
             Write-Verbose "Created package for configuration: $($configurationPackage.Path)"
         }
 
+        $stagingFolder = New-Item -Path "$pwd\staging" -ItemType Directory -ErrorAction Stop
         if($CompressConfiguration) {
-            Test-ConfigurationFileSizeOnDisk -ConfigurationPackage $configurationPackage.Path -CompressConfiguration
+            Test-ConfigurationFileSizeOnDisk -ConfigurationPackage $configurationPackage.Path -StagingFolder $stagingFolder.FullName -CompressConfiguration
         }
         else{
-            Test-ConfigurationFileSizeOnDisk -ConfigurationPackage $configurationPackage.Path
+            Test-ConfigurationFileSizeOnDisk -ConfigurationPackage $configurationPackage.Path -StagingFolder $stagingFolder.FullName
         }
 
 
@@ -124,6 +125,7 @@ function Publish-GuestConfigurationPackage {
         if ($PSCmdlet.ParameterSetName -ne 'Debug') {
             Write-Verbose 'Cleaning up...'
             Remove-Item -Path "$pwd\$configurationName" -ErrorAction SilentlyContinue -Force -Recurse
+            Remove-Item -Path "$pwd\staging" -ErrorAction SilentlyContinue -Force -Recurse
         }
     }
 }
