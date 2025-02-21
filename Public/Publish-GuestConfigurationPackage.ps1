@@ -9,8 +9,14 @@ function Publish-GuestConfigurationPackage {
     .PARAMETER Configuration
         The path to the DSC configuration file.
 
+    .PARAMETER ConfigurationParameters
+        A hashtable containing the configuration parameters to be used when generating the MOF file.
+
     .PARAMETER OutputFolder
         The path to the folder where the GuestConfigurationPackage will be created. The default value is the current directory.
+
+    .PARAMETER CompressConfiguration
+        Indicates whether to compress the configuration files before creating the package.
 
     .PARAMETER NoCleanup
         Indicates whether to clean up the temporary files created during the process. Default behavior is to clean up the temporary files.
@@ -19,10 +25,16 @@ function Publish-GuestConfigurationPackage {
         Publish-GuestConfigurationPackage -Configuration .\SimpleDscConfiguration.ps1
 
     .EXAMPLE
+        Publish-GuestConfigurationPackage -Configuration .\SimpleDscConfiguration.ps1 -ConfigurationParameters @{ComputerName = 'localhost'}
+
+    .EXAMPLE
         Publish-GuestConfigurationPackage -Configuration .\SimpleDscConfiguration.ps1 -OutputFolder .\Output
 
     .EXAMPLE
         Publish-GuestConfigurationPackage -Configuration .\SimpleDscConfiguration.ps1 -NoCleanup
+
+    .EXAMPLE
+        Publish-GuestConfigurationPackage -Configuration .\SimpleDscConfiguration.ps1 -CompressConfiguration
     #>
     [CmdletBinding()]
     param (
@@ -31,11 +43,17 @@ function Publish-GuestConfigurationPackage {
         [string]$Configuration,
 
         [Parameter()]
+        [hashtable]$ConfigurationParameters,
+
+        [Parameter()]
         [ValidateScript({ Test-Path -Path $_ -PathType Container })]
         $OutputFolder = $pwd.Path,
 
         [Parameter(ParameterSetName = 'Debug')]
-        [switch]$NoCleanup
+        [switch]$NoCleanup,
+
+        [Parameter()]
+        [switch]$CompressConfiguration
     )
     
     begin {
@@ -61,7 +79,13 @@ function Publish-GuestConfigurationPackage {
     }
     
     process {
-        $mofFile = . $configurationFile.FullName -ErrorAction Stop
+        if($ConfigurationParameters) {
+            $mofFile = . $configurationFile.FullName @ConfigurationParameters -ErrorAction Stop
+        }
+        else{
+            $mofFile = . $configurationFile.FullName -ErrorAction Stop
+        }
+        
         if (-not (Test-Path -Path $mofFile.FullName -PathType Leaf -ErrorAction SilentlyContinue)) {
             throw "Failed to generate MOF file from configuration file: $($configurationFile.FullName)"
         }   
@@ -81,7 +105,13 @@ function Publish-GuestConfigurationPackage {
             Write-Verbose "Created package for configuration: $($configurationPackage.Path)"
         }
 
-        Test-ConfigurationFileSizeOnDisk -ConfigurationPackage $configurationPackage.Path
+        if($CompressConfiguration) {
+            Test-ConfigurationFileSizeOnDisk -ConfigurationPackage $configurationPackage.Path -CompressConfiguration
+        }
+        else{
+            Test-ConfigurationFileSizeOnDisk -ConfigurationPackage $configurationPackage.Path
+        }
+
 
         @{
             ConfigurationName     = $configurationName

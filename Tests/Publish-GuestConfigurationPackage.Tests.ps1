@@ -180,7 +180,7 @@ Describe 'Invoking Publish-GuestConfigurationPackage with the CompressConfigurat
     Context 'testing cmdlet invocation' {
         BeforeEach {
             Mock Remove-Item {}
-            Publish-GuestConfigurationPackage -Configuration "$pwd\Tests\SampleConfigs\SimpleDscConfiguration.ps1" -NoCleanup
+            Publish-GuestConfigurationPackage -Configuration "$pwd\Tests\SampleConfigs\SimpleDscConfiguration.ps1" -CompressConfiguration
         }
 
         It 'should call Compress-ConfigurationFileSizeOnDisk to compress the configuration package' {
