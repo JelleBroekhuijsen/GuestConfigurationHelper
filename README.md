@@ -32,7 +32,8 @@ Publish-GuestConfigurationPackage -Configuration "C:\path\to\your\configuration.
 ## Roadmap
 
 - [ ] Add support for uploading Guest Configuration packages to Azure Storage Accounts
-- [ ] Add support for directly assigning a configuration to a VM or Arc Connected Machine to allow for quicker testing of configuration then what is supported when using Azure Policy for assignment
+- [ ] Add support for directly assigning a configuration to a VM or Arc Connected Machine to allow for quicker testing of configuration then what is supported when using Azure Policy for assignment\
+- [ ] Add tests for ConfigurationParameters
 - [V] Add support for detecting and warning about too large Guest Configuration packages
 - [V] Add support for reducing dependency size of Guest Configuration packages
 
