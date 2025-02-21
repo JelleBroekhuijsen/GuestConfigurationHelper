@@ -20,6 +20,7 @@ function Compress-ConfigurationFileSizeOnDisk {
   process {
     $folders = Get-ChildItem -Path $modulesFolder -Directory -Recurse -Depth 1 | Where-Object { $_.Name -match $versionRegex }
     foreach ($folder in $folders) {
+      Write-Verbose "Removing folder: $($folder.FullName)"
       Remove-Item -Path $folder.FullName -Recurse -Force
     }
   }
