@@ -81,6 +81,8 @@ function Publish-GuestConfigurationPackage {
             Write-Verbose "Created package for configuration: $($configurationPackage.Path)"
         }
 
+        Test-ConfigurationFileSizeOnDisk -ConfigurationPackage $configurationPackage.Path
+
         @{
             ConfigurationName     = $configurationName
             ConfigurationPackage  = $configurationPackage.Path

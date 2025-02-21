@@ -1,5 +1,9 @@
 BeforeAll {
     . $PSScriptRoot\..\Public\Publish-GuestConfigurationPackage.ps1
+    . $PSScriptRoot\..\Private\Test-ConfigurationFileSizeOnDisk.ps1
+    . $PSScriptRoot\..\Private\Compress-ConfigurationFileSizeOnDisk.ps1
+    Mock Test-ConfigurationFileSizeOnDisk 
+    Mock Compress-ConfigurationFileSizeOnDisk
 }
 
 Describe 'Invoking Publish-GuestConfigurationPackage with minimal parameters' {
@@ -67,6 +71,10 @@ Describe 'Invoking Publish-GuestConfigurationPackage with minimal parameters' {
 
         It 'should call Get-FileHash to calculate the hash of the created package' {
             Should -CommandName Get-FileHash -Exactly 1 -ParameterFilter { $Path -eq "$pwd\SimpleDscConfiguration.zip" }
+        }
+
+        It 'should call Test-ConfigurationFileSizeOnDisk to validate the size of the created package' {
+            Should -CommandName Test-ConfigurationFileSizeOnDisk -Exactly 1
         }
 
         AfterEach {
@@ -159,6 +167,24 @@ Describe 'Invoking Publish-GuestConfigurationPackage with the NoCleanup switch' 
 
         It 'should not call Remove-Item to clean up the temporary files' {
             Should -CommandName Remove-Item -Exactly 0
+        }
+
+        AfterEach {
+            Remove-Item -Path "$pwd\SimpleDscConfiguration.zip" -Force -ErrorAction SilentlyContinue
+            Remove-Item -Path "$pwd\SimpleDscConfiguration" -Force -ErrorAction SilentlyContinue -Recurse
+        }
+    }
+}	
+
+Describe 'Invoking Publish-GuestConfigurationPackage with the CompressConfiguration switch' {
+    Context 'testing cmdlet invocation' {
+        BeforeEach {
+            Mock Remove-Item {}
+            Publish-GuestConfigurationPackage -Configuration "$pwd\Tests\SampleConfigs\SimpleDscConfiguration.ps1" -NoCleanup
+        }
+
+        It 'should call Compress-ConfigurationFileSizeOnDisk to compress the configuration package' {
+            Should -CommandName Compress-ConfigurationFileSizeOnDisk -Exactly 1
         }
 
         AfterEach {

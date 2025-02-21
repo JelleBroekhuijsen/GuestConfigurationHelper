@@ -7,7 +7,11 @@ function Test-ConfigurationFileSizeOnDisk {
 
         [Parameter()]
         [ValidateScript({ Test-Path -Path $_ -PathType Container })]
-        $StagingFolder = $pwd.Path
+        $StagingFolder = $pwd.Path,
+
+        [Parameter()]
+        [Switch]
+        $CompressConfiguration
     )
 
     begin {
@@ -22,6 +26,10 @@ function Test-ConfigurationFileSizeOnDisk {
         
         Write-Verbose "Expanding configuration package: $($configurationPackageFile.FullName) to staging folder: $($stagingFolder.FullName)"
         Expand-Archive -Path $configurationPackageFile.FullName -DestinationPath $unzipFolder.FullName -Force
+
+        if($CompressConfiguration) {
+            Compress-ConfigurationFileSizeOnDisk -ExtractedConfigurationPackageFolder $unzipFolder.FullName
+        }
 
         $fileSize = Get-ChildItem -Path $unzipFolder.FullName -Recurse | Measure-Object -Property Length -Sum
 
