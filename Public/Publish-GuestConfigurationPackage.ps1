@@ -71,8 +71,9 @@ function Publish-GuestConfigurationPackage {
         Write-Verbose "Received parameters: $($PSBoundParameters| ConvertTo-Json)"
 
         $ErrorActionPreference = 'Stop'
+        $stagingFolder = Join-Path -Path $pwd -ChildPath 'GCH_Staging'
         $configurationFile = Get-Item -Path $Configuration
-        $configurations = Get-Content -Path $configurationFile.FullName -ErrorAction Stop | Select-String -Pattern '^Configuration\s+(\w+)' -AllMatches
+        $configurations = Get-Content -Path $configurationFile.FullName -ErrorAction Stop | Select-String -Pattern '\bConfiguration\b\s+(\w+)' -AllMatches
         if ($configurations.Matches.Count -gt 1) {
             throw "Found multiple configurations in configuration file: $($configurationFile.FullName)"
         }
@@ -118,36 +119,38 @@ function Publish-GuestConfigurationPackage {
             Write-Verbose "Created package for configuration: $($configurationPackage.Path)"
         }
 
-        $stagingFolder = New-Item -Path "$pwd\staging" -ItemType Directory -ErrorAction Stop
+        New-Item -Path $stagingFolder -ItemType Directory -ErrorAction SilentlyContinue
         if($CompressConfiguration) {
-            Test-ConfigurationFileSizeOnDisk -ConfigurationPackage $configurationPackage.Path -StagingFolder $stagingFolder.FullName -CompressConfiguration
-            Compress-Archive -Path "$($stagingFolder.FullName)\*\*" -DestinationPath $configurationPackage.Path -Force
+            Test-ConfigurationFileSizeOnDisk -ConfigurationPackage $configurationPackage.Path -StagingFolder $stagingFolder -CompressConfiguration
+            Compress-Archive -Path "$stagingFolder\*\*" -DestinationPath $configurationPackage.Path -Force
         }
         else{
-            Test-ConfigurationFileSizeOnDisk -ConfigurationPackage $configurationPackage.Path -StagingFolder $stagingFolder.FullName
+            Test-ConfigurationFileSizeOnDisk -ConfigurationPackage $configurationPackage.Path -StagingFolder $stagingFolder
         }
 
 
-        @{
+        $output = @{
             ConfigurationName     = $configurationName
             ConfigurationPackage  = $configurationPackage.Path
             ConfigurationFileHash = (Get-FileHash -Path $configurationPackage.Path -Algorithm SHA256).Hash
         }
 
         Write-Host "Setting output variables..."
-        Write-Host "  ConfigurationName: $configurationName"
+        Write-Host "  ConfigurationName: $($output.configurationName)"
         Write-Host "##vso[task.setvariable variable=ConfigurationName;isOutput=true]$configurationName"
-        Write-Host "  ConfigurationPackage: $($configurationPackage.Path)"
+        Write-Host "  ConfigurationPackage: $($output.ConfigurationPackage)"
         Write-Host "##vso[task.setvariable variable=ConfigurationPackage;isOutput=true]$($configurationPackage.Path)"
-        Write-Host "  ConfigurationFileHash: $((Get-FileHash -Path $configurationPackage.Path -Algorithm SHA256).Hash)"
-        Write-Host "##vso[task.setvariable variable=ConfigurationFileHash;isOutput=true]$((Get-FileHash -Path $configurationPackage.Path -Algorithm SHA256).Hash)"
+        Write-Host "  ConfigurationFileHash: $($output.ConfigurationFileHash)"
+        Write-Host "##vso[task.setvariable variable=ConfigurationFileHash;isOutput=true]$($output.ConfigurationFileHash)"
+
+        $output
     }
     
     end {
         if ($PSCmdlet.ParameterSetName -ne 'Debug') {
             Write-Verbose 'Cleaning up...'
             Remove-Item -Path "$pwd\$configurationName" -ErrorAction SilentlyContinue -Force -Recurse
-            Remove-Item -Path "$pwd\staging" -ErrorAction SilentlyContinue -Force -Recurse
+            Remove-Item -Path $stagingFolder -ErrorAction SilentlyContinue -Force -Recurse
         }
     }
 }
