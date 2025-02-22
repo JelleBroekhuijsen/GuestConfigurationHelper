@@ -58,7 +58,11 @@ function Publish-GuestConfigurationPackage {
 
         [Parameter()]
         [switch]
-        $CompressConfiguration
+        $CompressConfiguration,
+
+        [Parameter()]
+        [string]
+        $OverrideDefaultConfigurationName
     )
     
     begin {
@@ -98,6 +102,10 @@ function Publish-GuestConfigurationPackage {
             Write-Verbose "Generated MOF file: $($mofFile.FullName)"
         }
 
+        if($OverrideDefaultConfigurationName) {
+            $configurationName = $OverrideDefaultConfigurationName
+        }
+        
         Write-Verbose "Renaming localhost.mof file to '$($configurationName).mof'..."
         Rename-Item -Path $mofFile.FullName -NewName "$($configurationName).mof" -ErrorAction Stop
 
