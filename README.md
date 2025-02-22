@@ -8,6 +8,10 @@ GuestConfigurationHelper is a PowerShell module that helps you to publish Guest 
 - Output the configuration parameters needed for assignment (SHA256 file hash, configuration name)
 - Warn about too large Guest Configuration packages
 - Reduce dependency size of Guest Configuration packages by removing unnecessary files (experimental)
+- Outputs Azure DevOps compatible output variables for use in a pipeline
+  - ConfigurationName
+  - ConfigurationHash
+  - ConfigurationPackagePath
 
 ## Installation
 
@@ -44,7 +48,6 @@ Publish-GuestConfigurationPackage -Configuration "C:\path\to\your\configuration.
 
 - [ ] Add support for uploading Guest Configuration packages to Azure Storage Accounts
 - [ ] Add support for directly assigning a configuration to a VM or Arc Connected Machine to allow for quicker testing of configuration then what is supported when using Azure Policy for assignment\
-- [ ] Add tests for ConfigurationParameters
 - [V] Add support for detecting and warning about too large Guest Configuration packages
 - [V] Add support for reducing dependency size of Guest Configuration packages
 
