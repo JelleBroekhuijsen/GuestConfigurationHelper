@@ -125,6 +125,14 @@ function Publish-GuestConfigurationPackage {
             ConfigurationPackage  = $configurationPackage.Path
             ConfigurationFileHash = (Get-FileHash -Path $configurationPackage.Path -Algorithm SHA256).Hash
         }
+
+        Write-Host "Setting output variables..."
+        Write-Host "  ConfigurationName: $configurationName"
+        Write-Host "##vso[task.setvariable variable=ConfigurationName;isOutput=true]$configurationName"
+        Write-Host "  ConfigurationPackage: $($configurationPackage.Path)"
+        Write-Host "##vso[task.setvariable variable=ConfigurationPackage;isOutput=true]$($configurationPackage.Path)"
+        Write-Host "  ConfigurationFileHash: $((Get-FileHash -Path $configurationPackage.Path -Algorithm SHA256).Hash)"
+        Write-Host "##vso[task.setvariable variable=ConfigurationFileHash;isOutput=true]$((Get-FileHash -Path $configurationPackage.Path -Algorithm SHA256).Hash)"
     }
     
     end {
