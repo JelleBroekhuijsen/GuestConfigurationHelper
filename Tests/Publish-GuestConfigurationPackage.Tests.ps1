@@ -206,6 +206,27 @@ Describe 'Invoking Publish-GuestConfigurationPackage with the NoCleanup switch' 
 }	
 
 Describe 'Invoking Publish-GuestConfigurationPackage with the CompressConfiguration switch' {
+    Context 'validating results' {
+        BeforeAll {
+            $result = Publish-GuestConfigurationPackage -Configuration "$pwd\Tests\SampleConfigs\SimpleDscConfiguration.ps1" -CompressConfiguration
+        }
+        It 'should create a GuestConfigurationPackage in the current directory with the same name as the configuration' {
+            Test-Path -Path .\SimpleDscConfiguration.zip -PathType Leaf | Should -Be $true
+        }
+        It 'should return the path to the created GuestConfigurationPackage' {
+            $result.ConfigurationPackage | Should -Be "$pwd\SimpleDscConfiguration.zip"
+        }
+        It 'should output the name of the configuration' {
+            $result.ConfigurationName | Should -Be 'SimpleDscConfiguration'
+        }
+        It 'should output a file hash of the created GuestConfigurationPackage' {
+            $result.ConfigurationFileHash | Should -Not -BeNullOrEmpty
+        }
+        AfterEach {
+            Remove-Item -Path "$pwd\SimpleDscConfiguration.zip" -Force -ErrorAction SilentlyContinue
+            Remove-Item -Path "$pwd\gch_staging" -Force -ErrorAction SilentlyContinue -Recurse
+        }
+    }
     Context 'testing cmdlet invocation' {
         BeforeEach {
             $sampleConfiguration = Get-Content -Path "$PSScriptRoot\SampleConfigs\SimpleDscConfiguration.ps1" -ErrorAction Stop
@@ -238,3 +259,57 @@ Describe 'Invoking Publish-GuestConfigurationPackage with the CompressConfigurat
         }
     }
 }	
+
+Describe 'Invoking Publish-GuestConfigurationPackage with the OverrideDefaultConfigurationName parameter' {
+    Context 'validating results' {
+        BeforeAll {
+            $result = Publish-GuestConfigurationPackage -Configuration "$pwd\Tests\SampleConfigs\SimpleDscConfiguration.ps1" -OverrideDefaultConfigurationName 'NewName' -Verbose
+        }
+        It 'should create a GuestConfigurationPackage in the current directory with the same name as the configuration' {
+            Test-Path -Path .\NewName.zip -PathType Leaf | Should -Be $true
+        }
+        It 'should return the path to the created GuestConfigurationPackage' {
+            $result.ConfigurationPackage | Should -Be "$pwd\NewName.zip"
+        }
+        It 'should output the name of the configuration' {
+            $result.ConfigurationName | Should -Be 'NewName'
+        }
+        It 'should output a file hash of the created GuestConfigurationPackage' {
+            $result.ConfigurationFileHash | Should -Not -BeNullOrEmpty
+        }
+        AfterEach {
+            Remove-Item -Path "$pwd\NewName.zip" -Force -ErrorAction SilentlyContinue
+            Remove-Item -Path "$pwd\gch_staging" -Force -ErrorAction SilentlyContinue -Recurse
+        }
+    }
+    Context 'testing cmdlet invocation' {
+        BeforeEach {
+            $sampleConfiguration = Get-Content -Path "$PSScriptRoot\SampleConfigs\SimpleDscConfiguration.ps1" -ErrorAction Stop
+            Mock Get-Item { return @{FullName = "$pwd\Tests\SampleConfigs\SimpleDscConfiguration.ps1" } }
+            Mock Get-Content { return $sampleConfiguration }
+            Mock Join-Path { return "$pwd\SimpleDscConfiguration\SimpleDscConfiguration.mof" }
+            Mock Rename-Item {}
+            Mock New-GuestConfigurationPackage { return @{Path = "$pwd\SimpleDscConfiguration.zip" } }
+            Mock Test-Path { return $true }
+            Mock Remove-Item {}
+            Mock Get-FileHash { return 'EFE785C0BFD22E7A44285BB1D9725C3AE06B9110CCA40D568BAFA9B5D824506B' }
+            Mock New-Item { return @{FullName = "$pwd\gch_staging" } }
+            Mock Test-ConfigurationFileSizeOnDisk 
+            Mock Compress-ConfigurationFileSizeOnDisk
+            Publish-GuestConfigurationPackage -Configuration "$pwd\Tests\SampleConfigs\SimpleDscConfiguration.ps1" -OverrideDefaultConfigurationName 'NewName'
+        }
+
+        It 'should rename the MOF file to the specified name' {
+            Should -CommandName Rename-Item -Exactly 1 -ParameterFilter { $NewName -eq 'NewName.mof' }
+        }
+
+        It 'should create a GuestConfigurationPackage with the specified name' {
+            Should -CommandName New-GuestConfigurationPackage -Exactly 1 -ParameterFilter { $Name -eq 'NewName' }
+        }
+
+        AfterAll {
+            Remove-Item -Path "$pwd\SimpleDscConfiguration.zip" -Force -ErrorAction SilentlyContinue
+            Remove-Item -Path "$pwd\SimpleDscConfiguration" -Force -ErrorAction SilentlyContinue -Recurse
+        }
+    }
+}

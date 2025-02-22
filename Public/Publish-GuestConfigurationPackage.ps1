@@ -83,9 +83,6 @@ function Publish-GuestConfigurationPackage {
 
         $configurationName = $configurations.Matches.Groups[1].Value
         Write-Verbose "Extracted configuration name: $($configurationName)"
-
-        $ConfigurationMofFile = Join-Path -Path $pwd -ChildPath "$configurationName" -AdditionalChildPath "$configurationName.mof"
-        Write-Verbose "Configuration MOF file: $($ConfigurationMofFile)"
     }
     
     process {
@@ -104,8 +101,13 @@ function Publish-GuestConfigurationPackage {
         }
 
         if($OverrideDefaultConfigurationName) {
+            Rename-Item (Join-Path -Path $pwd -ChildPath $configurationName) -NewName $OverrideDefaultConfigurationName -ErrorAction Stop
             $configurationName = $OverrideDefaultConfigurationName
+            $mofFile = Get-Item -Path "$pwd\$configurationName\localhost.mof"
         }
+
+        $ConfigurationMofFile = Join-Path -Path $pwd -ChildPath "$configurationName" -AdditionalChildPath "$configurationName.mof"
+        Write-Verbose "Configuration MOF file: $($ConfigurationMofFile.FullName)"
         
         Write-Verbose "Renaming localhost.mof file to '$($configurationName).mof'..."
         Rename-Item -Path $mofFile.FullName -NewName "$($configurationName).mof" -ErrorAction Stop
@@ -137,10 +139,10 @@ function Publish-GuestConfigurationPackage {
 
         Write-Host "Setting output variables..."
         Write-Host "  ConfigurationName: $($output.configurationName)"
-        Write-Host "##vso[task.setvariable variable=ConfigurationName;isOutput=true]$configurationName"
         Write-Host "  ConfigurationPackage: $($output.ConfigurationPackage)"
-        Write-Host "##vso[task.setvariable variable=ConfigurationPackage;isOutput=true]$($configurationPackage.Path)"
         Write-Host "  ConfigurationFileHash: $($output.ConfigurationFileHash)"
+        Write-Host "##vso[task.setvariable variable=ConfigurationName;isOutput=true]$configurationName"
+        Write-Host "##vso[task.setvariable variable=ConfigurationPackage;isOutput=true]$($configurationPackage.Path)"
         Write-Host "##vso[task.setvariable variable=ConfigurationFileHash;isOutput=true]$($output.ConfigurationFileHash)"
 
         $output
