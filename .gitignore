@@ -1,0 +1,13 @@
+# Test artifacts
+SimpleDscConfiguration/
+NewName/
+*.zip
+gch_staging/
+GCH_Staging/
+
+# Build artifacts
+publish/
+
+# PowerShell module artifacts
+*.psd1.backup
+*.psm1.backup

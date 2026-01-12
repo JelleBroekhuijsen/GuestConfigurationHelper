@@ -73,8 +73,7 @@ function Publish-GuestConfigurationPackage {
         $ErrorActionPreference = 'Stop'
         $stagingFolder = Join-Path -Path $pwd -ChildPath 'GCH_Staging'
         $configurationFile = Get-Item -Path $Configuration
-        # Match either 'Configuration' (DSC) or 'function' (test stub) keyword at start of line
-        $configurations = Get-Content -Path $configurationFile.FullName -ErrorAction Stop | Select-String -Pattern '^\s*(?:Configuration|function)\s+(\w+)' -AllMatches
+        $configurations = Get-Content -Path $configurationFile.FullName -ErrorAction Stop | Select-String -Pattern '^\s*Configuration\s+(\w+)' -AllMatches
         if ($configurations.Matches.Count -gt 1) {
             throw "Found multiple configurations in configuration file: $($configurationFile.FullName)"
         }
