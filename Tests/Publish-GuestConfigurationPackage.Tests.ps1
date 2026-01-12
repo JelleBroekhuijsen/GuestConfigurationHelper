@@ -2,7 +2,12 @@ BeforeAll {
     . $PSScriptRoot\..\Public\Publish-GuestConfigurationPackage.ps1
     . $PSScriptRoot\..\Private\Test-ConfigurationFileSizeOnDisk.ps1
     . $PSScriptRoot\..\Private\Compress-ConfigurationFileSizeOnDisk.ps1
-    
+
+    # Use test-friendly configuration that doesn't require PSDscResources module
+    $script:TestConfigPath = "$PSScriptRoot\SampleConfigs\SimpleDscConfigurationTest.ps1"
+    # Mock-friendly configuration for cmdlet invocation tests (does no file I/O when dot-sourced)
+    $script:MockConfigPath = "$PSScriptRoot\SampleConfigs\SimpleDscConfigurationMock.ps1"
+
     # Create a stub function for the external New-GuestConfigurationPackage command
     # This command is from the GuestConfiguration module (external dependency)
     # We stub it here to allow tests to run without requiring the module to be installed
@@ -11,39 +16,33 @@ BeforeAll {
         param(
             [Parameter(Mandatory)]
             [string]$Name,
-            
+
             [Parameter(Mandatory)]
             [string]$Configuration,
-            
+
             [Parameter(Mandatory)]
             [string]$Path,
-            
+
             [Parameter()]
             [string]$Type,
-            
+
             [Parameter()]
             [switch]$Force
         )
-        
+
         # Return object structure similar to actual New-GuestConfigurationPackage output
         $packagePath = Join-Path $Path "$Name.zip"
+        # Create actual zip file for tests that check file existence
+        if (-not (Test-Path $packagePath)) {
+            $tempFile = New-TemporaryFile
+            Compress-Archive -Path $tempFile.FullName -DestinationPath $packagePath -Force
+            Remove-Item $tempFile.FullName -Force
+        }
         return [PSCustomObject]@{
             Path = $packagePath
             Name = $Name
             Configuration = $Configuration
         }
-    }
-    
-    # Create a stub function for DSC Configuration execution (used when dot-sourcing config files)
-    function SimpleDscConfiguration {
-        param()
-        # Create a mock MOF file output
-        $currentLocation = Get-Location
-        $configFolder = Join-Path $currentLocation "SimpleDscConfiguration"
-        New-Item -ItemType Directory -Path $configFolder -Force | Out-Null
-        $mofPath = Join-Path $configFolder "localhost.mof"
-        "Mock MOF content" | Out-File -FilePath $mofPath -Force
-        return Get-Item $mofPath
     }
 }
 
@@ -55,7 +54,7 @@ Describe 'Invoking Publish-GuestConfigurationPackage with minimal parameters' {
     }
     Context 'validating results' {
         BeforeAll {
-            $result = Publish-GuestConfigurationPackage -Configuration "$pwd\Tests\SampleConfigs\SimpleDscConfiguration.ps1"
+            $result = Publish-GuestConfigurationPackage -Configuration "$script:TestConfigPath"
         }
         It 'should create a GuestConfigurationPackage in the current directory with the same name as the configuration' {
             Test-Path -Path .\SimpleDscConfiguration.zip -PathType Leaf | Should -Be $true
@@ -76,8 +75,16 @@ Describe 'Invoking Publish-GuestConfigurationPackage with minimal parameters' {
     }
     Context 'testing cmdlet invocation' {
         BeforeEach {
-            $sampleConfiguration = Get-Content -Path "$PSScriptRoot\SampleConfigs\SimpleDscConfiguration.ps1" -ErrorAction Stop
-            Mock Get-Item { return @{FullName = "$pwd\Tests\SampleConfigs\SimpleDscConfiguration.ps1" } }
+            $sampleConfiguration = Get-Content -Path $script:MockConfigPath -ErrorAction Stop
+            # Return different values for Get-Item based on what's being requested
+            Mock Get-Item {
+                if ($Path -like '*.ps1') {
+                    return @{FullName = "$script:MockConfigPath" }
+                } else {
+                    # For MOF file requests, return the expected localhost.mof path
+                    return @{FullName = "$pwd\SimpleDscConfiguration\localhost.mof" }
+                }
+            }
             Mock Get-Content { return $sampleConfiguration }
             Mock Join-Path { return "$pwd\SimpleDscConfiguration\SimpleDscConfiguration.mof" }
             Mock Rename-Item {}
@@ -86,16 +93,16 @@ Describe 'Invoking Publish-GuestConfigurationPackage with minimal parameters' {
             Mock Remove-Item {}
             Mock Get-FileHash { return 'EFE785C0BFD22E7A44285BB1D9725C3AE06B9110CCA40D568BAFA9B5D824506B' }
             Mock New-Item { return @{FullName = "$pwd\gch_staging" } }
-            Mock Test-ConfigurationFileSizeOnDisk 
+            Mock Test-ConfigurationFileSizeOnDisk
             Mock Compress-ConfigurationFileSizeOnDisk
-            Publish-GuestConfigurationPackage -Configuration "$pwd\Tests\SampleConfigs\SimpleDscConfiguration.ps1"
+            Publish-GuestConfigurationPackage -Configuration "$script:MockConfigPath"
         }
         It 'should call Get-Item with the path to the configuration file' {
-            Should -CommandName Get-Item -ParameterFilter { $Path -like '*\Tests\SampleConfigs\SimpleDscConfiguration.ps1' } -Exactly 1
+            Should -CommandName Get-Item -ParameterFilter { $Path -like '*SimpleDscConfigurationMock.ps1' } -Exactly 1
         }
 
         It 'should call Get-Content with the path to the configuration file' {
-            Should -CommandName Get-Content -Exactly 1 -ParameterFilter { $Path -like '*\Tests\SampleConfigs\SimpleDscConfiguration.ps1' }
+            Should -CommandName Get-Content -Exactly 1 -ParameterFilter { $Path -like '*SimpleDscConfigurationMock.ps1' }
         }
 
         It 'should call Join-Path with the path to predict the path of the final MOF file' {
@@ -132,24 +139,26 @@ Describe 'Invoking Publish-GuestConfigurationPackage with minimal parameters' {
     }
     Context 'testing error handling' {
         BeforeEach {
-            Mock Test-ConfigurationFileSizeOnDisk 
+            Mock Test-ConfigurationFileSizeOnDisk
             Mock Compress-ConfigurationFileSizeOnDisk
         }
         It 'should throw an error if it finds multiple configurations in the configuration file' {
-            Mock Get-Content { return "Configuration SimpleDscConfiguration {} `nConfiguration AnotherConfiguration {}" }
-            { Publish-GuestConfigurationPackage -Configuration "$pwd\Tests\SampleConfigs\SimpleDscConfiguration.ps1" } | Should -Throw "Found multiple configurations in configuration file: *"
+            # Need to mock Get-Content before calling the function
+            Mock Get-Content { return @("Configuration SimpleDscConfiguration {}", "Configuration AnotherConfiguration {}") }
+            { Publish-GuestConfigurationPackage -Configuration "$script:MockConfigPath" } | Should -Throw "Found multiple configurations in configuration file: *"
         }
         It 'should throw an error if it fails to detect configurations in the configuration file' {
-            Mock Get-Content {}
-            { Publish-GuestConfigurationPackage -Configuration "$pwd\Tests\SampleConfigs\SimpleDscConfiguration.ps1" } | Should -Throw  "Failed to detect any configurations in configuration file: *"
+            Mock Get-Content { return @() }
+            { Publish-GuestConfigurationPackage -Configuration "$script:MockConfigPath" } | Should -Throw  "Failed to detect any configurations in configuration file: *"
         }
         It 'should throw an error if it fails to generate a MOF file from the configuration file' {
-            Mock Test-Path -ParameterFilter { $Path -like "*localhost.mof" } { return $false }
-            { Publish-GuestConfigurationPackage -Configuration "$pwd\Tests\SampleConfigs\SimpleDscConfiguration.ps1" } | Should -Throw "Failed to generate MOF file from configuration file: *"
+            # Use mock config which doesn't create any files
+            { Publish-GuestConfigurationPackage -Configuration "$script:MockConfigPath" } | Should -Throw "Failed to generate MOF file from configuration file: *"
         }
         It 'should throw an error if it fails to create the GuestConfigurationPackage' {
-            Mock New-GuestConfigurationPackage { return $null }
-            { Publish-GuestConfigurationPackage -Configuration "$pwd\Tests\SampleConfigs\SimpleDscConfiguration.ps1" } | Should -Throw "Failed to create package for configuration: SimpleDscConfiguration"
+            Mock New-GuestConfigurationPackage { return @{ Path = $null } }
+            # The error message uses $configurationFile.BaseName which is SimpleDscConfigurationTest
+            { Publish-GuestConfigurationPackage -Configuration "$script:TestConfigPath" } | Should -Throw "Failed to create package for configuration: SimpleDscConfigurationTest"
         }
         AfterEach {
             Remove-Item -Path "$pwd\SimpleDscConfiguration" -Force -ErrorAction SilentlyContinue -Recurse
@@ -165,12 +174,12 @@ Describe 'Invoking Publish-GuestConfigurationPackage with the output folder para
             Mock Compress-ConfigurationFileSizeOnDisk
         }
         It 'should throw an error if the specified output folder does not exist' {
-            { Publish-GuestConfigurationPackage -Configuration "$pwd\Tests\SampleConfigs\SimpleDscConfiguration.ps1" -OutputFolder 'C:\NonExistentFolder' } | Should -Throw "Cannot validate argument on parameter 'OutputFolder'. The `" Test-Path -Path `$_ -PathType Container `" validation script for the argument with value `"C:\NonExistentFolder`" did not return a result of True.*"
+            { Publish-GuestConfigurationPackage -Configuration "$script:TestConfigPath" -OutputFolder 'C:\NonExistentFolder' } | Should -Throw "Cannot validate argument on parameter 'OutputFolder'. The `" Test-Path -Path `$_ -PathType Container `" validation script for the argument with value `"C:\NonExistentFolder`" did not return a result of True.*"
         }
     }
     Context 'validating results' {
         BeforeAll {
-            $result = Publish-GuestConfigurationPackage -Configuration "$pwd\Tests\SampleConfigs\SimpleDscConfiguration.ps1" -OutputFolder "$pwd\Tests\SampleConfigs"
+            $result = Publish-GuestConfigurationPackage -Configuration "$script:TestConfigPath" -OutputFolder "$pwd\Tests\SampleConfigs"
         }
         BeforeEach{
             Mock Test-ConfigurationFileSizeOnDisk 
@@ -194,7 +203,7 @@ Describe 'Invoking Publish-GuestConfigurationPackage with the output folder para
             Mock Get-FileHash {}
             Mock Test-ConfigurationFileSizeOnDisk 
             Mock Compress-ConfigurationFileSizeOnDisk
-            Publish-GuestConfigurationPackage -Configuration "$pwd\Tests\SampleConfigs\SimpleDscConfiguration.ps1" -OutputFolder $outputFolder
+            Publish-GuestConfigurationPackage -Configuration "$script:TestConfigPath" -OutputFolder $outputFolder
         }
 
         It 'should call New-GuestConfigurationPackage to create the package' {
@@ -210,7 +219,7 @@ Describe 'Invoking Publish-GuestConfigurationPackage with the output folder para
 Describe 'Invoking Publish-GuestConfigurationPackage with the NoCleanup switch' {
     Context 'validating results' {
         BeforeAll {
-            $result = Publish-GuestConfigurationPackage -Configuration "$pwd\Tests\SampleConfigs\SimpleDscConfiguration.ps1" -NoCleanup
+            $result = Publish-GuestConfigurationPackage -Configuration "$script:TestConfigPath" -NoCleanup
         }
         BeforeEach{
             Mock Test-ConfigurationFileSizeOnDisk 
@@ -229,14 +238,15 @@ Describe 'Invoking Publish-GuestConfigurationPackage with the NoCleanup switch' 
     }
     Context 'testing cmdlet invocation' {
         BeforeEach {
-            Mock Remove-Item {}
-            Mock Test-ConfigurationFileSizeOnDisk 
+            # Only mock Remove-Item calls targeting the config folder or staging folder (cleanup paths)
+            Mock Remove-Item {} -ParameterFilter { $Path -like '*SimpleDscConfiguration*' -or $Path -like '*GCH_Staging*' }
+            Mock Test-ConfigurationFileSizeOnDisk
             Mock Compress-ConfigurationFileSizeOnDisk
-            Publish-GuestConfigurationPackage -Configuration "$pwd\Tests\SampleConfigs\SimpleDscConfiguration.ps1" -NoCleanup
+            Publish-GuestConfigurationPackage -Configuration "$script:TestConfigPath" -NoCleanup
         }
 
         It 'should not call Remove-Item to clean up the temporary files' {
-            Should -CommandName Remove-Item -Exactly 0
+            Should -CommandName Remove-Item -ParameterFilter { $Path -like '*SimpleDscConfiguration*' -or $Path -like '*GCH_Staging*' } -Exactly 0
         }
 
         AfterAll {
@@ -250,7 +260,7 @@ Describe 'Invoking Publish-GuestConfigurationPackage with the NoCleanup switch' 
 Describe 'Invoking Publish-GuestConfigurationPackage with the CompressConfiguration switch' {
     Context 'validating results' {
         BeforeAll {
-            $result = Publish-GuestConfigurationPackage -Configuration "$pwd\Tests\SampleConfigs\SimpleDscConfiguration.ps1" -CompressConfiguration
+            $result = Publish-GuestConfigurationPackage -Configuration "$script:TestConfigPath" -CompressConfiguration
         }
         It 'should create a GuestConfigurationPackage in the current directory with the same name as the configuration' {
             Test-Path -Path .\SimpleDscConfiguration.zip -PathType Leaf | Should -Be $true
@@ -271,8 +281,8 @@ Describe 'Invoking Publish-GuestConfigurationPackage with the CompressConfigurat
     }
     Context 'testing cmdlet invocation' {
         BeforeEach {
-            $sampleConfiguration = Get-Content -Path "$PSScriptRoot\SampleConfigs\SimpleDscConfiguration.ps1" -ErrorAction Stop
-            Mock Get-Item { return @{FullName = "$pwd\Tests\SampleConfigs\SimpleDscConfiguration.ps1" } }
+            $sampleConfiguration = Get-Content -Path $script:MockConfigPath -ErrorAction Stop
+            Mock Get-Item { return @{FullName = "$script:MockConfigPath" } }
             Mock Get-Content { return $sampleConfiguration }
             Mock Join-Path { return "$pwd\SimpleDscConfiguration\SimpleDscConfiguration.mof" }
             Mock Rename-Item {}
@@ -281,10 +291,10 @@ Describe 'Invoking Publish-GuestConfigurationPackage with the CompressConfigurat
             Mock Remove-Item {}
             Mock Get-FileHash { return 'EFE785C0BFD22E7A44285BB1D9725C3AE06B9110CCA40D568BAFA9B5D824506B' }
             Mock New-Item { return @{FullName = "$pwd\gch_staging" } }
-            Mock Test-ConfigurationFileSizeOnDisk 
+            Mock Test-ConfigurationFileSizeOnDisk
             Mock Compress-ConfigurationFileSizeOnDisk
             Mock Compress-Archive {}
-            Publish-GuestConfigurationPackage -Configuration "$pwd\Tests\SampleConfigs\SimpleDscConfiguration.ps1" -CompressConfiguration
+            Publish-GuestConfigurationPackage -Configuration "$script:MockConfigPath" -CompressConfiguration
         }
 
         It 'should call Compress-ConfigurationFileSizeOnDisk to compress the configuration package' {
@@ -305,7 +315,7 @@ Describe 'Invoking Publish-GuestConfigurationPackage with the CompressConfigurat
 Describe 'Invoking Publish-GuestConfigurationPackage with the OverrideDefaultConfigurationName parameter' {
     Context 'validating results' {
         BeforeAll {
-            $result = Publish-GuestConfigurationPackage -Configuration "$pwd\Tests\SampleConfigs\SimpleDscConfiguration.ps1" -OverrideDefaultConfigurationName 'NewName' -Verbose
+            $result = Publish-GuestConfigurationPackage -Configuration "$script:TestConfigPath" -OverrideDefaultConfigurationName 'NewName' -Verbose
         }
         It 'should create a GuestConfigurationPackage in the current directory with the same name as the configuration' {
             Test-Path -Path .\NewName.zip -PathType Leaf | Should -Be $true
@@ -326,8 +336,8 @@ Describe 'Invoking Publish-GuestConfigurationPackage with the OverrideDefaultCon
     }
     Context 'testing cmdlet invocation' {
         BeforeEach {
-            $sampleConfiguration = Get-Content -Path "$PSScriptRoot\SampleConfigs\SimpleDscConfiguration.ps1" -ErrorAction Stop
-            Mock Get-Item { return @{FullName = "$pwd\Tests\SampleConfigs\SimpleDscConfiguration.ps1" } }
+            $sampleConfiguration = Get-Content -Path $script:MockConfigPath -ErrorAction Stop
+            Mock Get-Item { return @{FullName = "$script:MockConfigPath" } }
             Mock Get-Content { return $sampleConfiguration }
             Mock Join-Path { return "$pwd\SimpleDscConfiguration\SimpleDscConfiguration.mof" }
             Mock Rename-Item {}
@@ -336,9 +346,9 @@ Describe 'Invoking Publish-GuestConfigurationPackage with the OverrideDefaultCon
             Mock Remove-Item {}
             Mock Get-FileHash { return 'EFE785C0BFD22E7A44285BB1D9725C3AE06B9110CCA40D568BAFA9B5D824506B' }
             Mock New-Item { return @{FullName = "$pwd\gch_staging" } }
-            Mock Test-ConfigurationFileSizeOnDisk 
+            Mock Test-ConfigurationFileSizeOnDisk
             Mock Compress-ConfigurationFileSizeOnDisk
-            Publish-GuestConfigurationPackage -Configuration "$pwd\Tests\SampleConfigs\SimpleDscConfiguration.ps1" -OverrideDefaultConfigurationName 'NewName'
+            Publish-GuestConfigurationPackage -Configuration "$script:MockConfigPath" -OverrideDefaultConfigurationName 'NewName'
         }
 
         It 'should rename the MOF file to the specified name' {
@@ -390,7 +400,7 @@ Describe 'Invoking Publish-GuestConfigurationPackage with deeply nested Configur
             }
             
             # Capture verbose output
-            $verboseOutput = Publish-GuestConfigurationPackage -Configuration "$pwd\Tests\SampleConfigs\SimpleDscConfiguration.ps1" -ConfigurationParameters $deeplyNestedParams -Verbose 4>&1
+            $verboseOutput = Publish-GuestConfigurationPackage -Configuration "$script:TestConfigPath" -ConfigurationParameters $deeplyNestedParams -Verbose 4>&1
             
             # Check that no truncation warning appears in the verbose output
             $verboseOutput | Where-Object { $_ -match 'truncated as serialization has exceeded the set depth' } | Should -BeNullOrEmpty
