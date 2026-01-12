@@ -7,7 +7,7 @@
 
 **Fix**: Moved delimiters to their own lines without any leading whitespace.
 
-**Location**: `.github/workflows/ci-and-release.yml` lines 361-371
+**Location**: `.github/workflows/ci-and-release.yml` lines 442-452
 
 **Before**:
 ```powershell
