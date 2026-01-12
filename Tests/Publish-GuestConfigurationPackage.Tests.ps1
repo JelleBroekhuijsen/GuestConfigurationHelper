@@ -1,9 +1,11 @@
 BeforeAll {
     . $PSScriptRoot\..\Public\Publish-GuestConfigurationPackage.ps1
+    . $PSScriptRoot\..\Public\New-GuestConfigurationPackage.ps1
     . $PSScriptRoot\..\Private\Test-ConfigurationFileSizeOnDisk.ps1
     . $PSScriptRoot\..\Private\Compress-ConfigurationFileSizeOnDisk.ps1
     
-    # Create a stub function for the external New-GuestConfigurationPackage command
+    # Override the New-GuestConfigurationPackage wrapper with a test stub
+    # This avoids the need for the actual GuestConfiguration module in tests
     function New-GuestConfigurationPackage {
         param(
             [string]$Name,
@@ -13,6 +15,17 @@ BeforeAll {
             [switch]$Force
         )
         return @{Path = Join-Path $Path "$Name.zip" }
+    }
+    
+    # Create a stub function for DSC Configuration execution (used when dot-sourcing config files)
+    function SimpleDscConfiguration {
+        param()
+        # Create a mock MOF file output
+        $configFolder = Join-Path $pwd "SimpleDscConfiguration"
+        New-Item -ItemType Directory -Path $configFolder -Force | Out-Null
+        $mofPath = Join-Path $configFolder "localhost.mof"
+        "Mock MOF content" | Out-File -FilePath $mofPath -Force
+        return Get-Item $mofPath
     }
 }
 
