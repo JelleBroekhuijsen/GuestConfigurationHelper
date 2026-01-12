@@ -313,3 +313,51 @@ Describe 'Invoking Publish-GuestConfigurationPackage with the OverrideDefaultCon
         }
     }
 }
+
+Describe 'Invoking Publish-GuestConfigurationPackage with deeply nested ConfigurationParameters' {
+    Context 'testing that deeply nested parameters do not cause JSON truncation warnings' {
+        BeforeEach {
+            Mock Test-ConfigurationFileSizeOnDisk 
+            Mock Compress-ConfigurationFileSizeOnDisk
+        }
+        It 'should not produce JSON truncation warnings when ConfigurationParameters contain deeply nested objects' {
+            # Create a deeply nested parameter structure similar to the issue reported
+            $deeplyNestedParams = @{
+                Verbose = $true
+                ConfigurationData = @{
+                    NonNodeData = @{
+                        sentinelTenants = @(
+                            @{
+                                connectWiseCompanyId = 'TST001'
+                                ensure = 'Present'
+                                azureTenantId = 'infrastructure@newemail.co.za'
+                                azureKeyVaultName = 'kvsenprdzanfilm01'
+                                secretNamePrefix = 'tst-dev'
+                            },
+                            @{
+                                connectWiseCompanyId = 'ACU004'
+                                ensure = 'Present'
+                                azureTenantId = 'acumentgroupsa.onmicrosoft.com'
+                                azureKeyVaultName = 'kvsenprdzanfilm01'
+                                secretNamePrefix = 'acu-prd'
+                            }
+                        )
+                        AllNodes = @()
+                    }
+                }
+            }
+            
+            # Capture verbose output
+            $verboseOutput = Publish-GuestConfigurationPackage -Configuration "$pwd\Tests\SampleConfigs\SimpleDscConfiguration.ps1" -ConfigurationParameters $deeplyNestedParams -Verbose 4>&1
+            
+            # Check that no truncation warning appears in the verbose output
+            $verboseOutput | Where-Object { $_ -match 'truncated as serialization has exceeded the set depth' } | Should -BeNullOrEmpty
+        }
+        
+        AfterEach {
+            Remove-Item -Path "$pwd\SimpleDscConfiguration.zip" -Force -ErrorAction SilentlyContinue
+            Remove-Item -Path "$pwd\gch_staging" -Force -ErrorAction SilentlyContinue -Recurse
+            Remove-Item -Path "$pwd\SimpleDscConfiguration" -Force -ErrorAction SilentlyContinue -Recurse
+        }
+    }
+}

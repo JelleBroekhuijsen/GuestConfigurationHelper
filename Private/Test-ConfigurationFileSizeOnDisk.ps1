@@ -19,7 +19,7 @@ function Test-ConfigurationFileSizeOnDisk {
     begin {
         Write-Verbose 'Test-ConfigurationFileSizeOnDisk started'
         Write-Verbose "Running with parameter set: $($PSCmdlet.ParameterSetName)"
-        Write-Verbose "Received parameters: $($PSBoundParameters| ConvertTo-Json)"
+        Write-Verbose "Received parameters: $($PSBoundParameters| ConvertTo-Json -Depth 10)"
     }
 
     process {

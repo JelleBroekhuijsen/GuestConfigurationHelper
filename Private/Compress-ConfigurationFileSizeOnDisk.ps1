@@ -10,7 +10,7 @@ function Compress-ConfigurationFileSizeOnDisk {
   begin {
     Write-Verbose 'Compress-ConfigurationFileSizeOnDisk started'
     Write-Verbose "Running with parameter set: $($PSCmdlet.ParameterSetName)"
-    Write-Verbose "Received parameters: $($PSBoundParameters| ConvertTo-Json)"
+    Write-Verbose "Received parameters: $($PSBoundParameters| ConvertTo-Json -Depth 10)"
 
     Write-Warning "Reducing the configuration file size works by removing duplicate files from the configuration's included PowerShell module dependencies. This will break support for having multiple versions of the same module in the configuration package. This is an experimental feature and may not work as expected."
     $versionRegex = '^\d+(\.\d+)*$'

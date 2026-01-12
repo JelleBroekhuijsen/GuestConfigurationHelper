@@ -68,7 +68,7 @@ function Publish-GuestConfigurationPackage {
     begin {
         Write-Verbose 'Publish-GuestConfigurationPackage started'
         Write-Verbose "Running with parameter set: $($PSCmdlet.ParameterSetName)"
-        Write-Verbose "Received parameters: $($PSBoundParameters| ConvertTo-Json)"
+        Write-Verbose "Received parameters: $($PSBoundParameters| ConvertTo-Json -Depth 10)"
 
         $ErrorActionPreference = 'Stop'
         $stagingFolder = Join-Path -Path $pwd -ChildPath 'GCH_Staging'
