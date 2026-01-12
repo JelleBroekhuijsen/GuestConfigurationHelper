@@ -141,8 +141,21 @@ jobs:
           $publishDir = Join-Path $env:GITHUB_WORKSPACE "publish"
           $moduleDir = Join-Path $publishDir $moduleName
 
+          # Verify working directory
+          Write-Host "Working directory: $env:GITHUB_WORKSPACE" -ForegroundColor Gray
+          
           # Create publish directory structure
-          New-Item -ItemType Directory -Path $moduleDir -Force | Out-Null
+          try {
+            New-Item -ItemType Directory -Path $moduleDir -Force | Out-Null
+            Write-Host "✓ Created directory: $moduleDir" -ForegroundColor Green
+          }
+          catch {
+            Write-Host "##[error]Failed to create module directory!" -ForegroundColor Red
+            Write-Host "##[error]Path: $moduleDir" -ForegroundColor Red
+            Write-Host "##[error]Error: $_" -ForegroundColor Red
+            exit 1
+          }
+          Write-Host ""
 
           # Copy module files (excluding repository metadata, tests, etc.)
           $filesToCopy = @(
@@ -150,25 +163,59 @@ jobs:
             "$moduleName.psm1",
             "Helpers.ps1"
           )
+          
+          $requiredFiles = @("$moduleName.psd1", "$moduleName.psm1")
+          $copiedCount = 0
 
           foreach ($file in $filesToCopy) {
             $sourcePath = Join-Path $env:GITHUB_WORKSPACE $file
             if (Test-Path $sourcePath) {
-              Copy-Item -Path $sourcePath -Destination $moduleDir -Force
-              Write-Host "  Copied: $file" -ForegroundColor Gray
+              try {
+                Copy-Item -Path $sourcePath -Destination $moduleDir -Force -ErrorAction Stop
+                Write-Host "  ✓ Copied: $file" -ForegroundColor Gray
+                $copiedCount++
+              }
+              catch {
+                Write-Host "##[error]Failed to copy file: $file" -ForegroundColor Red
+                Write-Host "##[error]Error: $_" -ForegroundColor Red
+                exit 1
+              }
+            } elseif ($requiredFiles -contains $file) {
+              Write-Host "##[error]Required file not found: $file" -ForegroundColor Red
+              Write-Host "##[error]Expected path: $sourcePath" -ForegroundColor Red
+              exit 1
+            } else {
+              Write-Host "  ⚠ Optional file not found: $file" -ForegroundColor Yellow
             }
           }
+          
+          if ($copiedCount -eq 0) {
+            Write-Host "##[error]No files were copied!" -ForegroundColor Red
+            exit 1
+          }
+          Write-Host ""
 
           # Copy directories
           $dirsToPublish = @('Public', 'Private')
           foreach ($dir in $dirsToPublish) {
             $sourcePath = Join-Path $env:GITHUB_WORKSPACE $dir
             if (Test-Path $sourcePath) {
-              Copy-Item -Path $sourcePath -Destination $moduleDir -Recurse -Force
-              Write-Host "  Copied directory: $dir" -ForegroundColor Gray
+              try {
+                Copy-Item -Path $sourcePath -Destination $moduleDir -Recurse -Force -ErrorAction Stop
+                $fileCount = (Get-ChildItem -Path (Join-Path $moduleDir $dir) -Recurse -File).Count
+                Write-Host "  ✓ Copied directory: $dir ($fileCount files)" -ForegroundColor Gray
+              }
+              catch {
+                Write-Host "##[error]Failed to copy directory: $dir" -ForegroundColor Red
+                Write-Host "##[error]Error: $_" -ForegroundColor Red
+                exit 1
+              }
+            } else {
+              Write-Host "  ⚠ Directory not found: $dir" -ForegroundColor Yellow
             }
           }
 
+          Write-Host ""
           Write-Host "✓ Module prepared at: $moduleDir" -ForegroundColor Green
 
       - name: Upload module artifact
@@ -276,44 +323,73 @@ jobs:
           $moduleName = "${{ steps.get-version.outputs.module_name }}"
           $version = "${{ steps.get-version.outputs.version }}"
           $zipName = "$moduleName-$version.zip"
+          $publishDir = Join-Path $env:GITHUB_WORKSPACE "publish"
+          $moduleDir = Join-Path $publishDir $moduleName
 
           Write-Host "Module: $moduleName" -ForegroundColor Gray
           Write-Host "Version: $version" -ForegroundColor Gray
           Write-Host "Package name: $zipName" -ForegroundColor Gray
+          Write-Host "Working directory: $env:GITHUB_WORKSPACE" -ForegroundColor Gray
           Write-Host ""
 
           # Verify publish directory exists and has content
-          if (-not (Test-Path "publish/$moduleName")) {
-            Write-Host "##[error]Module directory not found: publish/$moduleName" -ForegroundColor Red
+          if (-not (Test-Path $moduleDir)) {
+            Write-Host "##[error]Module directory not found!" -ForegroundColor Red
+            Write-Host "##[error]Expected path: $moduleDir" -ForegroundColor Red
             Write-Host "##[error]The module preparation step may have failed." -ForegroundColor Red
+            Write-Host "##[error]Current directory contents:" -ForegroundColor Red
+            Get-ChildItem $env:GITHUB_WORKSPACE -Force | Format-Table Name
+            exit 1
+          }
+          
+          # Verify critical files exist
+          $manifestPath = Join-Path $moduleDir "$moduleName.psd1"
+          if (-not (Test-Path $manifestPath)) {
+            Write-Host "##[error]Module manifest not found in prepared directory!" -ForegroundColor Red
+            Write-Host "##[error]Expected path: $manifestPath" -ForegroundColor Red
             exit 1
           }
 
           Write-Host "Module directory contents:" -ForegroundColor Cyan
-          Get-ChildItem -Path "publish/$moduleName" -Recurse | 
-            Select-Object FullName, Length | 
+          $fileList = Get-ChildItem -Path $moduleDir -Recurse -File
+          $totalSize = ($fileList | Measure-Object -Property Length -Sum).Sum
+          $fileList | Select-Object FullName, Length | 
             ForEach-Object { Write-Host "  $($_.FullName) ($($_.Length) bytes)" -ForegroundColor Gray }
+          Write-Host ""
+          Write-Host "Total files: $($fileList.Count)" -ForegroundColor Gray
+          Write-Host "Total size: $([math]::Round($totalSize / 1KB, 2)) KB" -ForegroundColor Gray
           Write-Host ""
 
           Write-Host "Creating zip archive..." -ForegroundColor Cyan
           
           try {
             # Compress from within the publish directory to avoid nested structure
-            Push-Location publish
-            Compress-Archive -Path "$moduleName/*" -DestinationPath "../$zipName" -Force
-            Pop-Location
+            $currentLocation = Get-Location
+            Set-Location $publishDir
+            Compress-Archive -Path "$moduleName/*" -DestinationPath "$env:GITHUB_WORKSPACE/$zipName" -Force -ErrorAction Stop
+            Set-Location $currentLocation
             
-            if (Test-Path $zipName) {
-              $zipSize = (Get-Item $zipName).Length
+            $zipPath = Join-Path $env:GITHUB_WORKSPACE $zipName
+            if (Test-Path $zipPath) {
+              $zipSize = (Get-Item $zipPath).Length
               Write-Host "✓ Created $zipName ($([math]::Round($zipSize / 1KB, 2)) KB)" -ForegroundColor Green
+              
+              # Validate zip is not empty or corrupt
+              if ($zipSize -lt 1KB) {
+                Write-Host "##[error]Zip file is suspiciously small ($zipSize bytes)!" -ForegroundColor Red
+                Write-Host "##[error]The archive may be empty or corrupt." -ForegroundColor Red
+                exit 1
+              }
             } else {
               Write-Host "##[error]Zip file was not created!" -ForegroundColor Red
+              Write-Host "##[error]Expected path: $zipPath" -ForegroundColor Red
               exit 1
             }
           }
           catch {
             Write-Host "##[error]Failed to create zip archive!" -ForegroundColor Red
             Write-Host "##[error]Error: $_" -ForegroundColor Red
+            Write-Host "##[error]Stack trace: $($_.ScriptStackTrace)" -ForegroundColor Red
             exit 1
           }
 
