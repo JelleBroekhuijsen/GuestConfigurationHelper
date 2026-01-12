@@ -47,8 +47,9 @@ function New-GuestConfigurationPackage {
     # This requires the GuestConfiguration module to be installed
     try {
         # Get the external command, excluding commands from the current module to avoid calling this wrapper recursively
+        $currentModuleName = $MyInvocation.MyCommand.Module.Name
         $externalCommand = Get-Command -Name 'New-GuestConfigurationPackage' -CommandType Cmdlet, Function -ErrorAction Stop | 
-            Where-Object { $_.Module.Name -ne 'GuestConfigurationHelper' } |
+            Where-Object { $_.Module.Name -ne $currentModuleName } |
             Select-Object -First 1
         
         if (-not $externalCommand) {
@@ -59,7 +60,9 @@ function New-GuestConfigurationPackage {
     }
     catch {
         # Provide helpful error message while preserving original exception details
-        if ($_.Exception.Message -match "parameter|GuestConfiguration") {
+        # Re-throw parameter binding errors and GuestConfiguration-specific errors directly
+        if ($_.Exception -is [System.Management.Automation.ParameterBindingException] -or
+            $_.Exception.Message -match 'GuestConfiguration') {
             throw
         }
         throw "Failed to call New-GuestConfigurationPackage. The GuestConfiguration module may not be installed. Install it using: Install-Module -Name GuestConfiguration. Original error: $($_.Exception.Message)"

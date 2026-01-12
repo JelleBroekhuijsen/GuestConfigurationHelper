@@ -24,7 +24,14 @@ BeforeAll {
             [Parameter()]
             [switch]$Force
         )
-        return @{Path = Join-Path $Path "$Name.zip" }
+        
+        # Return object structure similar to actual New-GuestConfigurationPackage output
+        $packagePath = Join-Path $Path "$Name.zip"
+        return [PSCustomObject]@{
+            Path = $packagePath
+            Name = $Name
+            Configuration = $Configuration
+        }
     }
     
     # Create a stub function for DSC Configuration execution (used when dot-sourcing config files)
