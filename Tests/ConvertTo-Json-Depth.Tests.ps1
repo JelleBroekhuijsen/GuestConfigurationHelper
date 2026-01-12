@@ -8,17 +8,17 @@ Describe 'ConvertTo-Json Depth parameter verification' {
     Context 'Verifying that ConvertTo-Json uses adequate depth' {
         It 'should use depth parameter in Publish-GuestConfigurationPackage' {
             $functionContent = Get-Content -Path "$PSScriptRoot\..\Public\Publish-GuestConfigurationPackage.ps1" -Raw
-            $functionContent | Should -Match 'ConvertTo-Json\s+-Depth\s+\d+'
+            $functionContent | Should -Match 'ConvertTo-Json.*-Depth\s+\d+'
         }
         
         It 'should use depth parameter in Test-ConfigurationFileSizeOnDisk' {
             $functionContent = Get-Content -Path "$PSScriptRoot\..\Private\Test-ConfigurationFileSizeOnDisk.ps1" -Raw
-            $functionContent | Should -Match 'ConvertTo-Json\s+-Depth\s+\d+'
+            $functionContent | Should -Match 'ConvertTo-Json.*-Depth\s+\d+'
         }
         
         It 'should use depth parameter in Compress-ConfigurationFileSizeOnDisk' {
             $functionContent = Get-Content -Path "$PSScriptRoot\..\Private\Compress-ConfigurationFileSizeOnDisk.ps1" -Raw
-            $functionContent | Should -Match 'ConvertTo-Json\s+-Depth\s+\d+'
+            $functionContent | Should -Match 'ConvertTo-Json.*-Depth\s+\d+'
         }
         
         It 'should not produce truncation warnings for deeply nested objects' {
@@ -55,7 +55,7 @@ Describe 'ConvertTo-Json Depth parameter verification' {
             $warnings | Where-Object { $_ -match 'truncated as serialization has exceeded the set depth' } | Should -BeNullOrEmpty
             
             # Verify the structure is preserved (not converted to string representation)
-            $json | Should -Not -Match '@\{sentinelTenants=System\.Object\[\]\}'
+            $json | Should -Not -Match '@\\{sentinelTenants=System\\.Object\\[\\]\\}'
             $json | Should -Match 'connectWiseCompanyId'
         }
         
