@@ -19,53 +19,15 @@ jobs:
 
       - name: Install required PowerShell modules
         shell: pwsh
-        run: |
-          Write-Host "Installing Pester..." -ForegroundColor Cyan
-          Install-Module -Name Pester -Force -SkipPublisherCheck -Scope CurrentUser
-          Write-Host "Installing PSScriptAnalyzer..." -ForegroundColor Cyan
-          Install-Module -Name PSScriptAnalyzer -Force -SkipPublisherCheck -Scope CurrentUser
-          Write-Host "Installing PSDscResources..." -ForegroundColor Cyan
-          Install-Module -Name PSDscResources -Force -SkipPublisherCheck -Scope CurrentUser
-          Write-Host "✓ Modules installed" -ForegroundColor Green
+        run: ./.github/workflows/scripts/Install-Modules.ps1
 
       - name: Run PSScriptAnalyzer
         shell: pwsh
-        run: |
-          Write-Host "Running PSScriptAnalyzer..." -ForegroundColor Cyan
-          $results = Invoke-ScriptAnalyzer -Path . -Recurse -Settings PSGallery
-
-          if ($results) {
-            Write-Host "PSScriptAnalyzer found $($results.Count) issue(s):" -ForegroundColor Yellow
-            $results | Format-Table -AutoSize
-
-            $errors = $results | Where-Object { $_.Severity -eq 'Error' }
-            $warnings = $results | Where-Object { $_.Severity -eq 'Warning' }
-
-            Write-Host "`nSummary:" -ForegroundColor Cyan
-            Write-Host "  Errors: $($errors.Count)" -ForegroundColor Red
-            Write-Host "  Warnings: $($warnings.Count)" -ForegroundColor Yellow
-
-            if ($errors.Count -gt 0) {
-              Write-Error "PSScriptAnalyzer found $($errors.Count) error(s). Please fix them before merging."
-              exit 1
-            }
-          } else {
-            Write-Host "✓ No issues found by PSScriptAnalyzer" -ForegroundColor Green
-          }
+        run: ./.github/workflows/scripts/Run-PSScriptAnalyzer.ps1
 
       - name: Run Pester tests
         shell: pwsh
-        run: |
-          Write-Host "Running Pester tests..." -ForegroundColor Cyan
-
-          $config = New-PesterConfiguration
-          $config.Run.Path = './Tests'
-          $config.Run.Exit = $true
-          $config.TestResult.Enabled = $true
-          $config.TestResult.OutputPath = 'testResults.xml'
-          $config.Output.Verbosity = 'Detailed'
-
-          Invoke-Pester -Configuration $config
+        run: ./.github/workflows/scripts/Run-PesterTests.ps1
 
       - name: Upload test results
         if: always()
@@ -87,136 +49,11 @@ jobs:
       - name: Get module version
         id: get-version
         shell: pwsh
-        run: |
-          Write-Host "================================================" -ForegroundColor Cyan
-          Write-Host "Extracting Module Information" -ForegroundColor Cyan
-          Write-Host "================================================" -ForegroundColor Cyan
-          
-          $manifestPath = Join-Path $env:GITHUB_WORKSPACE "GuestConfigurationHelper.psd1"
-          Write-Host "Manifest path: $manifestPath" -ForegroundColor Gray
-          
-          if (-not (Test-Path $manifestPath)) {
-            Write-Host "##[error]Module manifest not found!" -ForegroundColor Red
-            Write-Host "##[error]Expected path: $manifestPath" -ForegroundColor Red
-            Write-Host "##[error]Current directory: $env:GITHUB_WORKSPACE" -ForegroundColor Red
-            Write-Host "##[error]Directory contents:" -ForegroundColor Red
-            Get-ChildItem $env:GITHUB_WORKSPACE | Format-Table Name
-            exit 1
-          }
-          
-          Write-Host "✓ Manifest found" -ForegroundColor Green
-          Write-Host ""
-          
-          try {
-            $manifest = Import-PowerShellDataFile -Path $manifestPath
-            $version = $manifest.ModuleVersion
-            
-            # Get module name from the manifest file name itself
-            $moduleName = [System.IO.Path]::GetFileNameWithoutExtension($manifestPath)
-            
-            Write-Host "Module Information:" -ForegroundColor Cyan
-            Write-Host "  Name: $moduleName" -ForegroundColor Gray
-            Write-Host "  Version: $version" -ForegroundColor Gray
-            Write-Host "  Author: $($manifest.Author)" -ForegroundColor Gray
-            Write-Host "  Description: $($manifest.Description)" -ForegroundColor Gray
-            Write-Host ""
-            
-            Write-Host "Setting outputs..." -ForegroundColor Cyan
-            echo "version=$version" >> $env:GITHUB_OUTPUT
-            echo "module_name=$moduleName" >> $env:GITHUB_OUTPUT
-            Write-Host "✓ Outputs set successfully" -ForegroundColor Green
-          }
-          catch {
-            Write-Host "##[error]Failed to parse module manifest!" -ForegroundColor Red
-            Write-Host "##[error]Error: $_" -ForegroundColor Red
-            Write-Host "##[error]Manifest path: $manifestPath" -ForegroundColor Red
-            exit 1
-          }
+        run: ./.github/workflows/scripts/Get-ModuleVersion.ps1
 
       - name: Prepare module artifact
         shell: pwsh
-        run: |
-          Write-Host "Preparing module artifact..." -ForegroundColor Cyan
-          $moduleName = "${{ steps.get-version.outputs.module_name }}"
-          $publishDir = Join-Path $env:GITHUB_WORKSPACE "publish"
-          $moduleDir = Join-Path $publishDir $moduleName
-
-          # Verify working directory
-          Write-Host "Working directory: $env:GITHUB_WORKSPACE" -ForegroundColor Gray
-          
-          # Create publish directory structure
-          try {
-            New-Item -ItemType Directory -Path $moduleDir -Force | Out-Null
-            Write-Host "✓ Created directory: $moduleDir" -ForegroundColor Green
-          }
-          catch {
-            Write-Host "##[error]Failed to create module directory!" -ForegroundColor Red
-            Write-Host "##[error]Path: $moduleDir" -ForegroundColor Red
-            Write-Host "##[error]Error: $_" -ForegroundColor Red
-            exit 1
-          }
-          Write-Host ""
-
-          # Copy module files (excluding repository metadata, tests, etc.)
-          $filesToCopy = @(
-            "$moduleName.psd1",
-            "$moduleName.psm1",
-            "Helpers.ps1"
-          )
-          
-          $requiredFiles = @("$moduleName.psd1", "$moduleName.psm1")
-          $copiedCount = 0
-
-          foreach ($file in $filesToCopy) {
-            $sourcePath = Join-Path $env:GITHUB_WORKSPACE $file
-            if (Test-Path $sourcePath) {
-              try {
-                Copy-Item -Path $sourcePath -Destination $moduleDir -Force -ErrorAction Stop
-                Write-Host "  ✓ Copied: $file" -ForegroundColor Gray
-                $copiedCount++
-              }
-              catch {
-                Write-Host "##[error]Failed to copy file: $file" -ForegroundColor Red
-                Write-Host "##[error]Error: $_" -ForegroundColor Red
-                exit 1
-              }
-            } elseif ($requiredFiles -contains $file) {
-              Write-Host "##[error]Required file not found: $file" -ForegroundColor Red
-              Write-Host "##[error]Expected path: $sourcePath" -ForegroundColor Red
-              exit 1
-            } else {
-              Write-Host "  ⚠ Optional file not found: $file" -ForegroundColor Yellow
-            }
-          }
-          
-          if ($copiedCount -eq 0) {
-            Write-Host "##[error]No files were copied!" -ForegroundColor Red
-            exit 1
-          }
-          Write-Host ""
-
-          # Copy directories
-          $dirsToPublish = @('Public', 'Private')
-          foreach ($dir in $dirsToPublish) {
-            $sourcePath = Join-Path $env:GITHUB_WORKSPACE $dir
-            if (Test-Path $sourcePath) {
-              try {
-                Copy-Item -Path $sourcePath -Destination $moduleDir -Recurse -Force -ErrorAction Stop
-                $fileCount = (Get-ChildItem -Path (Join-Path $moduleDir $dir) -Recurse -File).Count
-                Write-Host "  ✓ Copied directory: $dir ($fileCount files)" -ForegroundColor Gray
-              }
-              catch {
-                Write-Host "##[error]Failed to copy directory: $dir" -ForegroundColor Red
-                Write-Host "##[error]Error: $_" -ForegroundColor Red
-                exit 1
-              }
-            } else {
-              Write-Host "  ⚠ Directory not found: $dir" -ForegroundColor Yellow
-            }
-          }
-
-          Write-Host ""
-          Write-Host "✓ Module prepared at: $moduleDir" -ForegroundColor Green
+        run: ./.github/workflows/scripts/Prepare-ModuleArtifact.ps1 -ModuleName "${{ steps.get-version.outputs.module_name }}"
 
       - name: Upload module artifact
         uses: actions/upload-artifact@v4
@@ -230,230 +67,21 @@ jobs:
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          Write-Host "================================================" -ForegroundColor Cyan
-          Write-Host "Checking Release Status" -ForegroundColor Cyan
-          Write-Host "================================================" -ForegroundColor Cyan
-          
-          $version = "${{ steps.get-version.outputs.version }}"
-          $tag = "v$version"
-          
-          Write-Host "Target tag: $tag" -ForegroundColor Gray
-          Write-Host "Repository: ${{ github.repository }}" -ForegroundColor Gray
-          Write-Host ""
-
-          # Capture both stdout and stderr, and the exit code
-          $ErrorActionPreference = 'Continue'
-          $output = gh release view $tag 2>&1
-          $exitCode = $LASTEXITCODE
-          
-          Write-Host "gh CLI exit code: $exitCode" -ForegroundColor Gray
-          
-          # Analyze the result
-          if ($exitCode -eq 0) {
-            # Release exists
-            $exists = $true
-            Write-Host "✓ Release $tag already exists" -ForegroundColor Yellow
-            Write-Host ""
-            Write-Host "Diagnostic output:" -ForegroundColor Gray
-            Write-Host $output -ForegroundColor Gray
-          } else {
-            # Release check failed - determine why
-            $outputStr = $output | Out-String
-            Write-Host "Release check returned non-zero exit code" -ForegroundColor Yellow
-            Write-Host ""
-            Write-Host "Diagnostic output:" -ForegroundColor Gray
-            Write-Host $outputStr -ForegroundColor Gray
-            Write-Host ""
-            
-            # Analyze the error to determine the type
-            if ($outputStr -match "release not found|404|Not Found|could not find release") {
-              # Expected: Release doesn't exist (404)
-              $exists = $false
-              Write-Host "✓ Release $tag does not exist (will be created)" -ForegroundColor Green
-            } elseif ($outputStr -match "authentication|401|Unauthorized|403|Forbidden|Bad credentials") {
-              # Authentication/authorization error
-              Write-Host "##[error]Authentication or authorization error detected!" -ForegroundColor Red
-              Write-Host "##[error]The GitHub token may be invalid or lack required permissions." -ForegroundColor Red
-              Write-Host "##[error]Required permissions: contents: write" -ForegroundColor Red
-              Write-Host "##[error]Full error output: $outputStr" -ForegroundColor Red
-              exit 1
-            } elseif ($outputStr -match "rate limit|429|API rate limit") {
-              # Rate limiting error
-              Write-Host "##[error]GitHub API rate limit exceeded!" -ForegroundColor Red
-              Write-Host "##[error]Please wait and retry later, or check your API usage." -ForegroundColor Red
-              Write-Host "##[error]Full error output: $outputStr" -ForegroundColor Red
-              exit 1
-            } elseif ($outputStr -match "timeout|timed out|connection") {
-              # Network/connectivity error
-              Write-Host "##[error]Network connectivity or timeout error!" -ForegroundColor Red
-              Write-Host "##[error]There may be network issues or GitHub API is unavailable." -ForegroundColor Red
-              Write-Host "##[error]Full error output: $outputStr" -ForegroundColor Red
-              exit 1
-            } else {
-              # Unknown error - fail with diagnostic info
-              Write-Host "##[error]Unexpected error checking release status!" -ForegroundColor Red
-              Write-Host "##[error]Exit code: $exitCode" -ForegroundColor Red
-              Write-Host "##[error]This might indicate a GitHub API issue, network problem, or gh CLI error." -ForegroundColor Red
-              Write-Host "##[error]Full error output: $outputStr" -ForegroundColor Red
-              Write-Host "##[error]Please check GitHub status at https://www.githubstatus.com/" -ForegroundColor Red
-              exit 1
-            }
-          }
-
-          Write-Host ""
-          Write-Host "Setting outputs:" -ForegroundColor Cyan
-          Write-Host "  exists: $($exists.ToString().ToLower())" -ForegroundColor Gray
-          Write-Host "  tag: $tag" -ForegroundColor Gray
-          
-          echo "exists=$($exists.ToString().ToLower())" >> $env:GITHUB_OUTPUT
-          echo "tag=$tag" >> $env:GITHUB_OUTPUT
-          
-          # Ensure script exits with success code
-          exit 0
+        run: ./.github/workflows/scripts/Check-Release.ps1 -Version "${{ steps.get-version.outputs.version }}"
 
       - name: Package module for release
         if: steps.check-release.outputs.exists == 'false'
         shell: pwsh
         run: |
-          Write-Host "================================================" -ForegroundColor Cyan
-          Write-Host "Packaging Module for Release" -ForegroundColor Cyan
-          Write-Host "================================================" -ForegroundColor Cyan
-          
-          $moduleName = "${{ steps.get-version.outputs.module_name }}"
-          $version = "${{ steps.get-version.outputs.version }}"
-          $zipName = "$moduleName-$version.zip"
-          $publishDir = Join-Path $env:GITHUB_WORKSPACE "publish"
-          $moduleDir = Join-Path $publishDir $moduleName
-
-          Write-Host "Module: $moduleName" -ForegroundColor Gray
-          Write-Host "Version: $version" -ForegroundColor Gray
-          Write-Host "Package name: $zipName" -ForegroundColor Gray
-          Write-Host "Working directory: $env:GITHUB_WORKSPACE" -ForegroundColor Gray
-          Write-Host ""
-
-          # Verify publish directory exists and has content
-          if (-not (Test-Path $moduleDir)) {
-            Write-Host "##[error]Module directory not found!" -ForegroundColor Red
-            Write-Host "##[error]Expected path: $moduleDir" -ForegroundColor Red
-            Write-Host "##[error]The module preparation step may have failed." -ForegroundColor Red
-            Write-Host "##[error]Current directory contents:" -ForegroundColor Red
-            Get-ChildItem $env:GITHUB_WORKSPACE -Force | Format-Table Name
-            exit 1
-          }
-          
-          # Verify critical files exist
-          $manifestPath = Join-Path $moduleDir "$moduleName.psd1"
-          if (-not (Test-Path $manifestPath)) {
-            Write-Host "##[error]Module manifest not found in prepared directory!" -ForegroundColor Red
-            Write-Host "##[error]Expected path: $manifestPath" -ForegroundColor Red
-            exit 1
-          }
-
-          Write-Host "Module directory contents:" -ForegroundColor Cyan
-          $fileList = Get-ChildItem -Path $moduleDir -Recurse -File
-          $totalSize = ($fileList | Measure-Object -Property Length -Sum).Sum
-          $fileList | Select-Object FullName, Length | 
-            ForEach-Object { Write-Host "  $($_.FullName) ($($_.Length) bytes)" -ForegroundColor Gray }
-          Write-Host ""
-          Write-Host "Total files: $($fileList.Count)" -ForegroundColor Gray
-          Write-Host "Total size: $([math]::Round($totalSize / 1KB, 2)) KB" -ForegroundColor Gray
-          Write-Host ""
-
-          Write-Host "Creating zip archive..." -ForegroundColor Cyan
-          
-          try {
-            # Compress from within the publish directory to avoid nested structure
-            $currentLocation = Get-Location
-            try {
-              Set-Location $publishDir
-              Compress-Archive -Path "$moduleName/*" -DestinationPath "$env:GITHUB_WORKSPACE/$zipName" -Force -ErrorAction Stop
-            }
-            finally {
-              # Ensure we always restore the location, even if Compress-Archive fails
-              Set-Location $currentLocation
-            }
-            
-            $zipPath = Join-Path $env:GITHUB_WORKSPACE $zipName
-            if (Test-Path $zipPath) {
-              $zipSize = (Get-Item $zipPath).Length
-              Write-Host "✓ Created $zipName ($([math]::Round($zipSize / 1KB, 2)) KB)" -ForegroundColor Green
-              
-              # Validate zip is not empty or corrupt
-              if ($zipSize -lt 1KB) {
-                Write-Host "##[error]Zip file is suspiciously small ($zipSize bytes)!" -ForegroundColor Red
-                Write-Host "##[error]The archive may be empty or corrupt." -ForegroundColor Red
-                exit 1
-              }
-            } else {
-              Write-Host "##[error]Zip file was not created!" -ForegroundColor Red
-              Write-Host "##[error]Expected path: $zipPath" -ForegroundColor Red
-              exit 1
-            }
-          }
-          catch {
-            Write-Host "##[error]Failed to create zip archive!" -ForegroundColor Red
-            Write-Host "##[error]Error: $_" -ForegroundColor Red
-            Write-Host "##[error]Stack trace: $($_.ScriptStackTrace)" -ForegroundColor Red
-            exit 1
-          }
+          ./.github/workflows/scripts/Package-ModuleForRelease.ps1 `
+            -ModuleName "${{ steps.get-version.outputs.module_name }}" `
+            -Version "${{ steps.get-version.outputs.version }}"
 
       - name: Generate release notes
         id: release-notes
         if: steps.check-release.outputs.exists == 'false'
         shell: pwsh
-        run: |
-          Write-Host "================================================" -ForegroundColor Cyan
-          Write-Host "Generating Release Notes" -ForegroundColor Cyan
-          Write-Host "================================================" -ForegroundColor Cyan
-          
-          $version = "${{ steps.get-version.outputs.version }}"
-          Write-Host "Version: $version" -ForegroundColor Gray
-          Write-Host ""
-          
-          # Get commits since last tag
-          Write-Host "Checking for previous releases..." -ForegroundColor Cyan
-          $ErrorActionPreference = 'Continue'
-          $lastTag = git describe --tags --abbrev=0 2>&1
-          $lastTagExitCode = $LASTEXITCODE
-          
-          if ($lastTagExitCode -eq 0) {
-            Write-Host "✓ Found previous tag: $lastTag" -ForegroundColor Green
-            Write-Host "Getting commits since $lastTag..." -ForegroundColor Cyan
-            $commits = git log "$lastTag..HEAD" --pretty=format:"- %s (%h)" 2>&1
-            $commitCount = (git rev-list "$lastTag..HEAD" --count 2>&1)
-            Write-Host "  Found $commitCount commits since last release" -ForegroundColor Gray
-          } else {
-            Write-Host "No previous tags found - this appears to be the first release" -ForegroundColor Yellow
-            Write-Host "Getting all commits..." -ForegroundColor Cyan
-            $commits = git log --pretty=format:"- %s (%h)" 2>&1
-            $commitCount = (git rev-list HEAD --count 2>&1)
-            Write-Host "  Found $commitCount total commits" -ForegroundColor Gray
-          }
-          
-          Write-Host ""
-          Write-Host "Commit list preview (first 10):" -ForegroundColor Cyan
-          $commits | Select-Object -First 10 | ForEach-Object { Write-Host "  $_" -ForegroundColor Gray }
-          if ($commitCount -gt 10) {
-            Write-Host "  ... and $($commitCount - 10) more" -ForegroundColor Gray
-          }
-          Write-Host ""
-
-          $notes = @"
-## GuestConfigurationHelper v$version
-
-### Changes
-$commits
-
-### Installation
-```powershell
-Install-Module -Name GuestConfigurationHelper -RequiredVersion $version
-```
-"@
-
-          # Write to file to preserve multiline content
-          $notes | Out-File -FilePath release-notes.txt -Encoding utf8
-          Write-Host "✓ Release notes generated and saved to release-notes.txt" -ForegroundColor Green
+        run: ./.github/workflows/scripts/Generate-ReleaseNotes.ps1 -Version "${{ steps.get-version.outputs.version }}"
 
       - name: Create GitHub release
         if: steps.check-release.outputs.exists == 'false'
@@ -461,88 +89,16 @@ Install-Module -Name GuestConfigurationHelper -RequiredVersion $version
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          Write-Host "================================================" -ForegroundColor Cyan
-          Write-Host "Creating GitHub Release" -ForegroundColor Cyan
-          Write-Host "================================================" -ForegroundColor Cyan
-          
-          $tag = "${{ steps.check-release.outputs.tag }}"
-          $notes = Get-Content -Path release-notes.txt -Raw
-          $moduleName = "${{ steps.get-version.outputs.module_name }}"
-          $version = "${{ steps.get-version.outputs.version }}"
-          $zipName = "$moduleName-$version.zip"
-
-          Write-Host "Release details:" -ForegroundColor Gray
-          Write-Host "  Tag: $tag" -ForegroundColor Gray
-          Write-Host "  Module: $moduleName" -ForegroundColor Gray
-          Write-Host "  Version: $version" -ForegroundColor Gray
-          Write-Host "  Asset: $zipName" -ForegroundColor Gray
-          Write-Host ""
-
-          # Verify asset exists before attempting release
-          if (-not (Test-Path $zipName)) {
-            Write-Host "##[error]Module package file not found: $zipName" -ForegroundColor Red
-            Write-Host "##[error]The package preparation step may have failed." -ForegroundColor Red
-            Write-Host "##[error]Current directory contents:" -ForegroundColor Red
-            Get-ChildItem -Force | Format-Table Name, Length, LastWriteTime
-            exit 1
-          }
-
-          Write-Host "✓ Asset file verified: $zipName ($([math]::Round((Get-Item $zipName).Length / 1KB, 2)) KB)" -ForegroundColor Green
-          Write-Host ""
-          Write-Host "Creating release..." -ForegroundColor Cyan
-
-          # Create release with error handling
-          $ErrorActionPreference = 'Continue'
-          $output = gh release create $tag `
-            --title "Release $tag" `
-            --notes $notes `
-            --verify-tag=false `
-            $zipName 2>&1
-          $exitCode = $LASTEXITCODE
-
-          if ($exitCode -eq 0) {
-            Write-Host "✓ Release $tag created successfully" -ForegroundColor Green
-            Write-Host ""
-            Write-Host "Release output:" -ForegroundColor Gray
-            Write-Host $output -ForegroundColor Gray
-          } else {
-            $outputStr = $output | Out-String
-            Write-Host "##[error]Failed to create GitHub release!" -ForegroundColor Red
-            Write-Host "##[error]Exit code: $exitCode" -ForegroundColor Red
-            Write-Host ""
-            Write-Host "Error output:" -ForegroundColor Red
-            Write-Host $outputStr -ForegroundColor Red
-            Write-Host ""
-            
-            # Provide specific guidance based on error type
-            if ($outputStr -match "already exists|409|Conflict") {
-              Write-Host "##[error]The release or tag already exists. This may be a race condition." -ForegroundColor Red
-              Write-Host "##[error]Try re-running the workflow or manually delete the existing release/tag." -ForegroundColor Red
-            } elseif ($outputStr -match "authentication|401|Unauthorized|403|Forbidden") {
-              Write-Host "##[error]Authentication/authorization error!" -ForegroundColor Red
-              Write-Host "##[error]Ensure the workflow has 'contents: write' permission." -ForegroundColor Red
-            } elseif ($outputStr -match "validation|invalid") {
-              Write-Host "##[error]Validation error in release data!" -ForegroundColor Red
-              Write-Host "##[error]Check the release notes format or asset file." -ForegroundColor Red
-            } elseif ($outputStr -match "asset.*not found|no such file") {
-              Write-Host "##[error]Asset file error!" -ForegroundColor Red
-              Write-Host "##[error]The module package file may have been deleted or moved." -ForegroundColor Red
-            }
-            
-            Write-Host "##[error]For more information, see: https://cli.github.com/manual/gh_release_create" -ForegroundColor Red
-            exit 1
-          }
+          ./.github/workflows/scripts/Create-GitHubRelease.ps1 `
+            -Tag "${{ steps.check-release.outputs.tag }}" `
+            -ModuleName "${{ steps.get-version.outputs.module_name }}" `
+            -Version "${{ steps.get-version.outputs.version }}"
 
       - name: Release summary
         if: steps.check-release.outputs.exists == 'false'
         shell: pwsh
         run: |
-          $tag = "${{ steps.check-release.outputs.tag }}"
-          Write-Host "================================================" -ForegroundColor Green
-          Write-Host "Release Created Successfully!" -ForegroundColor Green
-          Write-Host "================================================" -ForegroundColor Green
-          Write-Host ""
-          Write-Host "Tag: $tag" -ForegroundColor Cyan
-          Write-Host "Release URL: ${{ github.server_url }}/${{ github.repository }}/releases/tag/$tag" -ForegroundColor Cyan
-          Write-Host ""
-          Write-Host "The publish workflow will now automatically publish to PowerShell Gallery" -ForegroundColor Yellow
+          ./.github/workflows/scripts/Show-ReleaseSummary.ps1 `
+            -Tag "${{ steps.check-release.outputs.tag }}" `
+            -Repository "${{ github.repository }}" `
+            -ServerUrl "${{ github.server_url }}"
