@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   test-and-analyze:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -24,6 +24,8 @@ jobs:
           Install-Module -Name Pester -Force -SkipPublisherCheck -Scope CurrentUser
           Write-Host "Installing PSScriptAnalyzer..." -ForegroundColor Cyan
           Install-Module -Name PSScriptAnalyzer -Force -SkipPublisherCheck -Scope CurrentUser
+          Write-Host "Installing PSDscResources..." -ForegroundColor Cyan
+          Install-Module -Name PSDscResources -Force -SkipPublisherCheck -Scope CurrentUser
           Write-Host "✓ Modules installed" -ForegroundColor Green
 
       - name: Run PSScriptAnalyzer
