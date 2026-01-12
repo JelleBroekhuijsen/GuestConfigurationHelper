@@ -27,12 +27,18 @@ jobs:
             $version = $tag -replace '^v', ''
             Write-Host "Release event - Tag: $tag, Version: $version"
           } else {
-            Write-Host "Manual workflow dispatch - will need to specify version"
+            Write-Host "Manual workflow dispatch - checking for latest release"
             # For manual runs, we'll download from latest release
-            $latestRelease = gh release view --json tagName,name --repo ${{ github.repository }} | ConvertFrom-Json
-            $tag = $latestRelease.tagName
-            $version = $tag -replace '^v', ''
-            Write-Host "Using latest release - Tag: $tag, Version: $version"
+            try {
+              $latestRelease = gh release view --json tagName,name --repo ${{ github.repository }} | ConvertFrom-Json
+              $tag = $latestRelease.tagName
+              $version = $tag -replace '^v', ''
+              Write-Host "Using latest release - Tag: $tag, Version: $version"
+            }
+            catch {
+              Write-Error "No releases found. Please create a release first or trigger this workflow from a release event."
+              exit 1
+            }
           }
           
           echo "tag=$tag" >> $env:GITHUB_OUTPUT

@@ -89,9 +89,14 @@ jobs:
           $manifestPath = Join-Path $env:GITHUB_WORKSPACE "GuestConfigurationHelper.psd1"
           $manifest = Import-PowerShellDataFile -Path $manifestPath
           $version = $manifest.ModuleVersion
+          
+          # Get module name from the manifest file name itself
+          $moduleName = [System.IO.Path]::GetFileNameWithoutExtension($manifestPath)
+          
+          Write-Host "Module name: $moduleName"
           Write-Host "Module version: $version"
           echo "version=$version" >> $env:GITHUB_OUTPUT
-          echo "module_name=$($manifest.RootModule -replace '\.psm1$','')" >> $env:GITHUB_OUTPUT
+          echo "module_name=$moduleName" >> $env:GITHUB_OUTPUT
 
       - name: Prepare module artifact
         shell: pwsh
@@ -147,7 +152,11 @@ jobs:
           $version = "${{ steps.get-version.outputs.version }}"
           $zipName = "$moduleName-$version.zip"
           
-          Compress-Archive -Path "publish/*" -DestinationPath $zipName -Force
+          # Compress from within the publish directory to avoid nested structure
+          Push-Location publish
+          Compress-Archive -Path "$moduleName/*" -DestinationPath "../$zipName" -Force
+          Pop-Location
+          
           Write-Host "✓ Created $zipName" -ForegroundColor Green
 
       - name: Check if release exists
