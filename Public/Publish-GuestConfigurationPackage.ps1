@@ -95,7 +95,7 @@ function Publish-GuestConfigurationPackage {
             try {
                 # Create temporary script to invoke in Windows PowerShell
                 $scriptContent = @"
-Set-Location -Path '$pwd'
+Set-Location -Path '$($pwd.Path)'
 . '$($configurationFile.FullName)'
 "@
                 if ($ConfigurationParameters) {
@@ -108,7 +108,7 @@ Set-Location -Path '$pwd'
                 }
                 
                 Set-Content -Path $tempScript -Value $scriptContent -Encoding UTF8
-                $result = powershell.exe -NoProfile -ExecutionPolicy Bypass -File $tempScript
+                powershell.exe -NoProfile -ExecutionPolicy Bypass -File $tempScript
                 if ($LASTEXITCODE -ne 0) {
                     throw "Failed to generate MOF file from configuration. Exit code: $LASTEXITCODE"
                 }
