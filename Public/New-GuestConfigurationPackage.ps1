@@ -46,11 +46,22 @@ function New-GuestConfigurationPackage {
     # Try to call the external New-GuestConfigurationPackage command
     # This requires the GuestConfiguration module to be installed
     try {
-        $externalCommand = Get-Command -Name 'New-GuestConfigurationPackage' -Module 'GuestConfiguration' -ErrorAction Stop
+        # Get the external command, excluding commands from the current module to avoid calling this wrapper recursively
+        $externalCommand = Get-Command -Name 'New-GuestConfigurationPackage' -CommandType Cmdlet, Function -ErrorAction Stop | 
+            Where-Object { $_.Module.Name -ne 'GuestConfigurationHelper' } |
+            Select-Object -First 1
+        
+        if (-not $externalCommand) {
+            throw "External New-GuestConfigurationPackage command not found in GuestConfiguration module"
+        }
+        
         & $externalCommand -Name $Name -Configuration $Configuration -Path $Path -Type $Type -Force:$Force
     }
     catch {
-        # If the GuestConfiguration module is not installed, throw a helpful error
-        throw "The GuestConfiguration module is not installed. Please install it using: Install-Module -Name GuestConfiguration"
+        # Provide helpful error message while preserving original exception details
+        if ($_.Exception.Message -match "parameter|GuestConfiguration") {
+            throw
+        }
+        throw "Failed to call New-GuestConfigurationPackage. The GuestConfiguration module may not be installed. Install it using: Install-Module -Name GuestConfiguration. Original error: $($_.Exception.Message)"
     }
 }

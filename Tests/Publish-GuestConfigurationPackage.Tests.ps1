@@ -7,11 +7,21 @@ BeforeAll {
     # Override the New-GuestConfigurationPackage wrapper with a test stub
     # This avoids the need for the actual GuestConfiguration module in tests
     function New-GuestConfigurationPackage {
+        [CmdletBinding()]
         param(
+            [Parameter(Mandatory)]
             [string]$Name,
+            
+            [Parameter(Mandatory)]
             [string]$Configuration,
+            
+            [Parameter(Mandatory)]
             [string]$Path,
+            
+            [Parameter()]
             [string]$Type,
+            
+            [Parameter()]
             [switch]$Force
         )
         return @{Path = Join-Path $Path "$Name.zip" }
