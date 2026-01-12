@@ -20,123 +20,322 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          Write-Host "================================================" -ForegroundColor Cyan
+          Write-Host "Getting Release Information" -ForegroundColor Cyan
+          Write-Host "================================================" -ForegroundColor Cyan
+          
           $moduleName = $env:MODULE_NAME
+          Write-Host "Module name: $moduleName" -ForegroundColor Gray
+          Write-Host "Event type: ${{ github.event_name }}" -ForegroundColor Gray
+          Write-Host "Repository: ${{ github.repository }}" -ForegroundColor Gray
+          Write-Host ""
           
           if ("${{ github.event_name }}" -eq "release") {
             $tag = "${{ github.event.release.tag_name }}"
             $version = $tag -replace '^v', ''
-            Write-Host "Release event - Tag: $tag, Version: $version"
+            Write-Host "✓ Release event detected" -ForegroundColor Green
+            Write-Host "  Tag: $tag" -ForegroundColor Gray
+            Write-Host "  Version: $version" -ForegroundColor Gray
           } else {
-            Write-Host "Manual workflow dispatch - checking for latest release"
+            Write-Host "Manual workflow dispatch - fetching latest release..." -ForegroundColor Cyan
+            
             # For manual runs, we'll download from latest release
-            try {
-              $latestRelease = gh release view --json tagName,name --repo ${{ github.repository }} | ConvertFrom-Json
-              $tag = $latestRelease.tagName
-              $version = $tag -replace '^v', ''
-              Write-Host "Using latest release - Tag: $tag, Version: $version"
-            }
-            catch {
-              Write-Error "No releases found. Please create a release first or trigger this workflow from a release event."
+            $ErrorActionPreference = 'Continue'
+            $output = gh release view --json tagName,name --repo ${{ github.repository }} 2>&1
+            $exitCode = $LASTEXITCODE
+            
+            if ($exitCode -eq 0) {
+              try {
+                $latestRelease = $output | ConvertFrom-Json
+                $tag = $latestRelease.tagName
+                $version = $tag -replace '^v', ''
+                Write-Host "✓ Latest release found" -ForegroundColor Green
+                Write-Host "  Tag: $tag" -ForegroundColor Gray
+                Write-Host "  Version: $version" -ForegroundColor Gray
+              }
+              catch {
+                Write-Host "##[error]Failed to parse release information!" -ForegroundColor Red
+                Write-Host "##[error]Parse error: $_" -ForegroundColor Red
+                Write-Host "##[error]Raw output: $output" -ForegroundColor Red
+                exit 1
+              }
+            } else {
+              $outputStr = $output | Out-String
+              Write-Host "##[error]Failed to fetch latest release!" -ForegroundColor Red
+              Write-Host "##[error]Exit code: $exitCode" -ForegroundColor Red
+              Write-Host ""
+              Write-Host "Error output:" -ForegroundColor Red
+              Write-Host $outputStr -ForegroundColor Red
+              Write-Host ""
+              
+              if ($outputStr -match "release not found|404|Not Found|no releases found") {
+                Write-Host "##[error]No releases found in this repository." -ForegroundColor Red
+                Write-Host "##[error]Please create a release first by:" -ForegroundColor Red
+                Write-Host "##[error]  1. Pushing to main branch to trigger CI workflow" -ForegroundColor Red
+                Write-Host "##[error]  2. Or manually creating a release with a module package asset" -ForegroundColor Red
+              } elseif ($outputStr -match "authentication|401|Unauthorized|403|Forbidden") {
+                Write-Host "##[error]Authentication or authorization error!" -ForegroundColor Red
+                Write-Host "##[error]Ensure the workflow has 'contents: read' permission." -ForegroundColor Red
+              } else {
+                Write-Host "##[error]Unexpected error. This may be a GitHub API issue." -ForegroundColor Red
+                Write-Host "##[error]Check GitHub status: https://www.githubstatus.com/" -ForegroundColor Red
+              }
+              
               exit 1
             }
           }
           
+          Write-Host ""
+          Write-Host "Setting outputs:" -ForegroundColor Cyan
           echo "tag=$tag" >> $env:GITHUB_OUTPUT
           echo "version=$version" >> $env:GITHUB_OUTPUT
           echo "asset_name=$moduleName-$version.zip" >> $env:GITHUB_OUTPUT
+          Write-Host "  tag: $tag" -ForegroundColor Gray
+          Write-Host "  version: $version" -ForegroundColor Gray
+          Write-Host "  asset_name: $moduleName-$version.zip" -ForegroundColor Gray
 
       - name: Download module package from release
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          Write-Host "================================================" -ForegroundColor Cyan
+          Write-Host "Downloading Module Package" -ForegroundColor Cyan
+          Write-Host "================================================" -ForegroundColor Cyan
+          
           $tag = "${{ steps.release.outputs.tag }}"
           $assetName = "${{ steps.release.outputs.asset_name }}"
           
-          Write-Host "Downloading $assetName from release $tag..." -ForegroundColor Cyan
+          Write-Host "Release tag: $tag" -ForegroundColor Gray
+          Write-Host "Asset name: $assetName" -ForegroundColor Gray
+          Write-Host "Repository: ${{ github.repository }}" -ForegroundColor Gray
+          Write-Host ""
+          Write-Host "Downloading from release..." -ForegroundColor Cyan
           
-          gh release download $tag --pattern $assetName --repo ${{ github.repository }}
+          # Download with error handling
+          $ErrorActionPreference = 'Continue'
+          $output = gh release download $tag --pattern $assetName --repo ${{ github.repository }} 2>&1
+          $exitCode = $LASTEXITCODE
           
-          if (-not (Test-Path $assetName)) {
-            Write-Error "Failed to download release asset: $assetName"
+          if ($exitCode -ne 0) {
+            $outputStr = $output | Out-String
+            Write-Host "##[error]Failed to download release asset!" -ForegroundColor Red
+            Write-Host "##[error]Exit code: $exitCode" -ForegroundColor Red
+            Write-Host ""
+            Write-Host "Error output:" -ForegroundColor Red
+            Write-Host $outputStr -ForegroundColor Red
+            Write-Host ""
+            
+            if ($outputStr -match "not found|404|no asset") {
+              Write-Host "##[error]Asset not found in release!" -ForegroundColor Red
+              Write-Host "##[error]Expected asset: $assetName" -ForegroundColor Red
+              Write-Host "##[error]The release may not have been created properly or the asset is missing." -ForegroundColor Red
+              Write-Host "##[error]Please check the release at: ${{ github.server_url }}/${{ github.repository }}/releases/tag/$tag" -ForegroundColor Red
+            } elseif ($outputStr -match "authentication|401|Unauthorized|403|Forbidden") {
+              Write-Host "##[error]Authentication or authorization error!" -ForegroundColor Red
+              Write-Host "##[error]Ensure the workflow has 'contents: read' permission." -ForegroundColor Red
+            } else {
+              Write-Host "##[error]Unexpected download error." -ForegroundColor Red
+              Write-Host "##[error]This may be a GitHub API issue or network problem." -ForegroundColor Red
+            }
+            
             exit 1
           }
           
-          Write-Host "✓ Downloaded $assetName" -ForegroundColor Green
+          Write-Host "Download command completed" -ForegroundColor Gray
+          Write-Host ""
+          
+          # Verify the file was actually downloaded
+          if (-not (Test-Path $assetName)) {
+            Write-Host "##[error]Asset file not found after download!" -ForegroundColor Red
+            Write-Host "##[error]Expected file: $assetName" -ForegroundColor Red
+            Write-Host "##[error]Current directory contents:" -ForegroundColor Red
+            Get-ChildItem -Force | Format-Table Name, Length, LastWriteTime
+            exit 1
+          }
+          
+          $fileSize = (Get-Item $assetName).Length
+          Write-Host "✓ Successfully downloaded $assetName ($([math]::Round($fileSize / 1KB, 2)) KB)" -ForegroundColor Green
 
       - name: Extract module package
         shell: pwsh
         run: |
+          Write-Host "================================================" -ForegroundColor Cyan
+          Write-Host "Extracting Module Package" -ForegroundColor Cyan
+          Write-Host "================================================" -ForegroundColor Cyan
+          
           $assetName = "${{ steps.release.outputs.asset_name }}"
           
-          Write-Host "Extracting module package..." -ForegroundColor Cyan
-          Expand-Archive -Path $assetName -DestinationPath . -Force
+          Write-Host "Archive file: $assetName" -ForegroundColor Gray
           
-          Write-Host "✓ Module package extracted" -ForegroundColor Green
+          # Verify archive exists
+          if (-not (Test-Path $assetName)) {
+            Write-Host "##[error]Archive file not found: $assetName" -ForegroundColor Red
+            Write-Host "##[error]The download step may have failed." -ForegroundColor Red
+            exit 1
+          }
+          
+          $archiveSize = (Get-Item $assetName).Length
+          Write-Host "Archive size: $([math]::Round($archiveSize / 1KB, 2)) KB" -ForegroundColor Gray
+          Write-Host ""
+          
+          Write-Host "Extracting archive..." -ForegroundColor Cyan
+          
+          try {
+            Expand-Archive -Path $assetName -DestinationPath . -Force
+            Write-Host "✓ Archive extracted successfully" -ForegroundColor Green
+            Write-Host ""
+            
+            Write-Host "Extracted contents:" -ForegroundColor Cyan
+            Get-ChildItem -Force | Format-Table Name, Length, LastWriteTime
+          }
+          catch {
+            Write-Host "##[error]Failed to extract archive!" -ForegroundColor Red
+            Write-Host "##[error]Error: $_" -ForegroundColor Red
+            Write-Host "##[error]The archive file may be corrupted." -ForegroundColor Red
+            exit 1
+          }
 
       - name: Validate module artifact
         id: validate
         shell: pwsh
         run: |
-          Write-Host "Validating module artifact..." -ForegroundColor Cyan
+          Write-Host "================================================" -ForegroundColor Cyan
+          Write-Host "Validating Module Artifact" -ForegroundColor Cyan
+          Write-Host "================================================" -ForegroundColor Cyan
+          
           $moduleName = $env:MODULE_NAME
           $moduleDir = Join-Path $env:GITHUB_WORKSPACE $moduleName
           $manifestPath = Join-Path $moduleDir "$moduleName.psd1"
 
-          if (-not (Test-Path $manifestPath)) {
-            Write-Error "Module manifest not found at: $manifestPath"
+          Write-Host "Module name: $moduleName" -ForegroundColor Gray
+          Write-Host "Module directory: $moduleDir" -ForegroundColor Gray
+          Write-Host "Manifest path: $manifestPath" -ForegroundColor Gray
+          Write-Host ""
+
+          # Check if module directory exists
+          if (-not (Test-Path $moduleDir)) {
+            Write-Host "##[error]Module directory not found!" -ForegroundColor Red
+            Write-Host "##[error]Expected path: $moduleDir" -ForegroundColor Red
+            Write-Host "##[error]The extraction step may have failed or produced unexpected structure." -ForegroundColor Red
+            Write-Host "##[error]Current directory contents:" -ForegroundColor Red
+            Get-ChildItem -Force | Format-Table Name
             exit 1
           }
 
+          Write-Host "✓ Module directory found" -ForegroundColor Green
+          Write-Host ""
+          Write-Host "Module directory contents:" -ForegroundColor Cyan
+          Get-ChildItem $moduleDir -Recurse | 
+            Select-Object FullName, Length | 
+            ForEach-Object { Write-Host "  $($_.FullName)" -ForegroundColor Gray }
+          Write-Host ""
+
+          # Check if manifest exists
+          if (-not (Test-Path $manifestPath)) {
+            Write-Host "##[error]Module manifest not found!" -ForegroundColor Red
+            Write-Host "##[error]Expected path: $manifestPath" -ForegroundColor Red
+            exit 1
+          }
+
+          Write-Host "✓ Manifest file found" -ForegroundColor Green
+          Write-Host ""
+          Write-Host "Validating manifest..." -ForegroundColor Cyan
+
           try {
             $manifest = Test-ModuleManifest -Path $manifestPath -ErrorAction Stop
+            
             Write-Host "✓ Module manifest is valid" -ForegroundColor Green
-            Write-Host "  Module Name: $($manifest.Name)" -ForegroundColor Gray
+            Write-Host ""
+            Write-Host "Module Details:" -ForegroundColor Cyan
+            Write-Host "  Name: $($manifest.Name)" -ForegroundColor Gray
             Write-Host "  Version: $($manifest.Version)" -ForegroundColor Gray
             Write-Host "  Author: $($manifest.Author)" -ForegroundColor Gray
             Write-Host "  Description: $($manifest.Description)" -ForegroundColor Gray
+            Write-Host "  PowerShell Version: $($manifest.PowerShellVersion)" -ForegroundColor Gray
+            if ($manifest.RequiredModules) {
+              Write-Host "  Required Modules:" -ForegroundColor Gray
+              $manifest.RequiredModules | ForEach-Object { Write-Host "    - $_" -ForegroundColor Gray }
+            }
+            Write-Host ""
 
             # Set outputs for later steps
+            Write-Host "Setting outputs..." -ForegroundColor Cyan
             echo "module_name=$($manifest.Name)" >> $env:GITHUB_OUTPUT
             echo "module_version=$($manifest.Version)" >> $env:GITHUB_OUTPUT
             echo "module_path=$moduleDir" >> $env:GITHUB_OUTPUT
+            Write-Host "✓ Outputs set successfully" -ForegroundColor Green
           }
           catch {
-            Write-Error "Module manifest validation failed: $_"
+            Write-Host "##[error]Module manifest validation failed!" -ForegroundColor Red
+            Write-Host "##[error]Error: $_" -ForegroundColor Red
+            Write-Host "##[error]The manifest may be malformed or have invalid metadata." -ForegroundColor Red
+            Write-Host "##[error]Manifest path: $manifestPath" -ForegroundColor Red
             exit 1
           }
 
       - name: Check if version exists in PowerShell Gallery
         shell: pwsh
         run: |
-          Write-Host "Checking if version exists in PowerShell Gallery..." -ForegroundColor Cyan
+          Write-Host "================================================" -ForegroundColor Cyan
+          Write-Host "Checking PowerShell Gallery" -ForegroundColor Cyan
+          Write-Host "================================================" -ForegroundColor Cyan
+          
           $moduleName = "${{ steps.validate.outputs.module_name }}"
           $moduleVersion = "${{ steps.validate.outputs.module_version }}"
+
+          Write-Host "Module: $moduleName" -ForegroundColor Gray
+          Write-Host "Version to publish: $moduleVersion" -ForegroundColor Gray
+          Write-Host ""
+          Write-Host "Querying PowerShell Gallery..." -ForegroundColor Cyan
 
           try {
             $existingModule = Find-Module -Name $moduleName -ErrorAction SilentlyContinue
             
             if ($existingModule) {
-              Write-Host "Found existing module in gallery: $($existingModule.Version)" -ForegroundColor Gray
+              Write-Host "✓ Found existing module in gallery" -ForegroundColor Yellow
+              Write-Host "  Current gallery version: $($existingModule.Version)" -ForegroundColor Gray
+              Write-Host "  Published: $($existingModule.PublishedDate)" -ForegroundColor Gray
+              Write-Host ""
               
-              if ([version]$existingModule.Version -eq [version]$moduleVersion) {
-                Write-Error "Version $moduleVersion already exists in PowerShell Gallery. Please update the version in the manifest."
+              $currentVersion = [version]$existingModule.Version
+              $newVersion = [version]$moduleVersion
+              
+              Write-Host "Version comparison:" -ForegroundColor Cyan
+              Write-Host "  Gallery version: $currentVersion" -ForegroundColor Gray
+              Write-Host "  New version:     $newVersion" -ForegroundColor Gray
+              Write-Host ""
+              
+              if ($currentVersion -eq $newVersion) {
+                Write-Host "##[error]Version conflict!" -ForegroundColor Red
+                Write-Host "##[error]Version $moduleVersion already exists in PowerShell Gallery." -ForegroundColor Red
+                Write-Host "##[error]You must update the version number in the module manifest before publishing." -ForegroundColor Red
+                Write-Host "##[error]Current gallery version: $currentVersion" -ForegroundColor Red
+                Write-Host "##[error]Attempted version: $newVersion" -ForegroundColor Red
                 exit 1
               }
-              elseif ([version]$existingModule.Version -gt [version]$moduleVersion) {
-                Write-Error "Attempting to publish version $moduleVersion which is older than the current gallery version $($existingModule.Version). Please update the version in the manifest."
+              elseif ($currentVersion -gt $newVersion) {
+                Write-Host "##[error]Version rollback detected!" -ForegroundColor Red
+                Write-Host "##[error]Attempting to publish version $newVersion which is older than gallery version $currentVersion." -ForegroundColor Red
+                Write-Host "##[error]PowerShell Gallery does not allow publishing older versions." -ForegroundColor Red
+                Write-Host "##[error]Please update the version in the manifest to be newer than $currentVersion." -ForegroundColor Red
                 exit 1
               }
               else {
-                Write-Host "✓ New version $moduleVersion is newer than gallery version $($existingModule.Version)" -ForegroundColor Green
+                Write-Host "✓ Version check passed" -ForegroundColor Green
+                Write-Host "  New version $newVersion is newer than gallery version $currentVersion" -ForegroundColor Green
               }
             }
             else {
-              Write-Host "✓ Module not found in gallery - this will be the first publish" -ForegroundColor Green
+              Write-Host "✓ Module not found in gallery" -ForegroundColor Green
+              Write-Host "  This will be the first publish of this module" -ForegroundColor Gray
             }
           }
           catch {
-            Write-Error "Failed to check PowerShell Gallery: $_"
+            Write-Host "##[error]Failed to query PowerShell Gallery!" -ForegroundColor Red
+            Write-Host "##[error]Error: $_" -ForegroundColor Red
+            Write-Host "##[error]This may be a network issue or PowerShell Gallery may be unavailable." -ForegroundColor Red
+            Write-Host "##[error]Check PowerShell Gallery status at: https://www.powershellgallery.com/" -ForegroundColor Red
             exit 1
           }
 
@@ -145,16 +344,39 @@ jobs:
         env:
           PSGALLERY_API_KEY: ${{ secrets.PS_GALLERY_API_KEY }}
         run: |
-          Write-Host "Publishing module to PowerShell Gallery..." -ForegroundColor Cyan
+          Write-Host "================================================" -ForegroundColor Cyan
+          Write-Host "Publishing to PowerShell Gallery" -ForegroundColor Cyan
+          Write-Host "================================================" -ForegroundColor Cyan
+          
+          $modulePath = "${{ steps.validate.outputs.module_path }}"
+          $moduleName = "${{ steps.validate.outputs.module_name }}"
+          $moduleVersion = "${{ steps.validate.outputs.module_version }}"
 
+          Write-Host "Module: $moduleName" -ForegroundColor Gray
+          Write-Host "Version: $moduleVersion" -ForegroundColor Gray
+          Write-Host "Path: $modulePath" -ForegroundColor Gray
+          Write-Host ""
+
+          # Verify API key is present
           if ([string]::IsNullOrEmpty($env:PSGALLERY_API_KEY)) {
-            Write-Error "PS_GALLERY_API_KEY secret is not set"
+            Write-Host "##[error]PowerShell Gallery API key not found!" -ForegroundColor Red
+            Write-Host "##[error]The PS_GALLERY_API_KEY secret must be set in repository secrets." -ForegroundColor Red
+            Write-Host "##[error]To set it:" -ForegroundColor Red
+            Write-Host "##[error]  1. Go to https://www.powershellgallery.com/ and sign in" -ForegroundColor Red
+            Write-Host "##[error]  2. Get your API key from your account settings" -ForegroundColor Red
+            Write-Host "##[error]  3. Add it as a secret named PS_GALLERY_API_KEY in this repository" -ForegroundColor Red
             exit 1
           }
 
+          Write-Host "✓ API key found" -ForegroundColor Green
+          Write-Host ""
+          Write-Host "Publishing module..." -ForegroundColor Cyan
+          Write-Host "This may take a few minutes..." -ForegroundColor Gray
+          Write-Host ""
+
           try {
             $publishParams = @{
-              Path        = "${{ steps.validate.outputs.module_path }}"
+              Path        = $modulePath
               NuGetApiKey = $env:PSGALLERY_API_KEY
               Repository  = 'PSGallery'
               Verbose     = $true
@@ -163,10 +385,41 @@ jobs:
 
             Publish-Module @publishParams
 
+            Write-Host ""
             Write-Host "✓ Module published successfully to PowerShell Gallery" -ForegroundColor Green
+            Write-Host ""
+            Write-Host "Note: It may take a few minutes for the module to appear in search results." -ForegroundColor Yellow
           }
           catch {
-            Write-Error "Failed to publish module: $_"
+            Write-Host "##[error]Failed to publish module!" -ForegroundColor Red
+            Write-Host "##[error]Error: $_" -ForegroundColor Red
+            Write-Host ""
+            
+            $errorMessage = $_.Exception.Message
+            
+            if ($errorMessage -match "401|Unauthorized|API key") {
+              Write-Host "##[error]Authentication error!" -ForegroundColor Red
+              Write-Host "##[error]The API key may be invalid or expired." -ForegroundColor Red
+              Write-Host "##[error]Please regenerate your PowerShell Gallery API key and update the secret." -ForegroundColor Red
+            } elseif ($errorMessage -match "409|already exists|Conflict") {
+              Write-Host "##[error]Version conflict!" -ForegroundColor Red
+              Write-Host "##[error]Version $moduleVersion may already exist in the gallery." -ForegroundColor Red
+              Write-Host "##[error]The version check may have been outdated or there was a race condition." -ForegroundColor Red
+            } elseif ($errorMessage -match "400|Bad Request|validation") {
+              Write-Host "##[error]Validation error!" -ForegroundColor Red
+              Write-Host "##[error]The module manifest or package structure may not meet PSGallery requirements." -ForegroundColor Red
+              Write-Host "##[error]Check: https://docs.microsoft.com/en-us/powershell/scripting/gallery/concepts/publishing-guidelines" -ForegroundColor Red
+            } elseif ($errorMessage -match "timeout|timed out") {
+              Write-Host "##[error]Timeout error!" -ForegroundColor Red
+              Write-Host "##[error]The publish operation took too long. Try again later." -ForegroundColor Red
+            } elseif ($errorMessage -match "network|connection") {
+              Write-Host "##[error]Network error!" -ForegroundColor Red
+              Write-Host "##[error]Could not connect to PowerShell Gallery. Check https://www.powershellgallery.com/" -ForegroundColor Red
+            } else {
+              Write-Host "##[error]Unexpected error during publish!" -ForegroundColor Red
+              Write-Host "##[error]Please check the error message above for details." -ForegroundColor Red
+            }
+            
             exit 1
           }
 
