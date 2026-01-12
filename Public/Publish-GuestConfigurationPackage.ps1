@@ -92,9 +92,9 @@ function Publish-GuestConfigurationPackage {
         } else {
             & $configurationName -ErrorAction Stop
         }
-        $mofFile = Get-Item (Join-Path -Path $pwd -ChildPath $configurationName -AdditionalChildPath "localhost.mof")
+        $mofFile = Get-Item (Join-Path -Path $pwd -ChildPath $configurationName -AdditionalChildPath "localhost.mof") -ErrorAction SilentlyContinue
         
-        if (-not (Test-Path -Path $mofFile.FullName -PathType Leaf -ErrorAction SilentlyContinue)) {
+        if (-not $mofFile) {
             throw "Failed to generate MOF file from configuration file: $($configurationFile.FullName)"
         }   
         else {
