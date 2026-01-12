@@ -372,8 +372,8 @@ foreach ($file in $workflowFiles) {
     # Check for common issues
     $content = Get-Content $file.FullName -Raw
     
-    # Check for here-strings with leading whitespace
-    if ($content -match '\s+@"' -or $content -match '\s+"@') {
+    # Check for malformed here-string delimiters (content on same line as @" or "@)
+    if ($content -match '(?m)(^\s*\S+.*@"|"@.*\S+\s*$)') {
         Write-Warning "Potential here-string formatting issue in $($file.Name)"
     }
     
