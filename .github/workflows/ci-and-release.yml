@@ -145,6 +145,28 @@ jobs:
           path: publish/
           retention-days: 90
 
+      - name: Check if release exists
+        id: check-release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $version = "${{ steps.get-version.outputs.version }}"
+          $tag = "v$version"
+          
+          gh release view $tag 2>&1 | Out-Null
+          
+          if ($LASTEXITCODE -eq 0) {
+            $exists = $true
+            Write-Host "Release $tag already exists"
+          } else {
+            $exists = $false
+            Write-Host "Release $tag does not exist"
+          }
+
+          echo "exists=$($exists.ToString().ToLower())" >> $env:GITHUB_OUTPUT
+          echo "tag=$tag" >> $env:GITHUB_OUTPUT
+
       - name: Package module for release
         if: steps.check-release.outputs.exists == 'false'
         shell: pwsh
@@ -160,28 +182,6 @@ jobs:
           Pop-Location
           
           Write-Host "✓ Created $zipName" -ForegroundColor Green
-
-      - name: Check if release exists
-        id: check-release
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          $version = "${{ steps.get-version.outputs.version }}"
-          $tag = "v$version"
-          
-          try {
-            gh release view $tag 2>&1 | Out-Null
-            $exists = $true
-            Write-Host "Release $tag already exists"
-          }
-          catch {
-            $exists = $false
-            Write-Host "Release $tag does not exist"
-          }
-
-          echo "exists=$($exists.ToString().ToLower())" >> $env:GITHUB_OUTPUT
-          echo "tag=$tag" >> $env:GITHUB_OUTPUT
 
       - name: Generate release notes
         id: release-notes
