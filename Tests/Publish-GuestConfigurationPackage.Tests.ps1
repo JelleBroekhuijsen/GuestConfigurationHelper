@@ -2,7 +2,49 @@ BeforeAll {
     . $PSScriptRoot\..\Public\Publish-GuestConfigurationPackage.ps1
     . $PSScriptRoot\..\Private\Test-ConfigurationFileSizeOnDisk.ps1
     . $PSScriptRoot\..\Private\Compress-ConfigurationFileSizeOnDisk.ps1
-
+    
+    # Create a stub function for the external New-GuestConfigurationPackage command
+    # This command is from the GuestConfiguration module (external dependency)
+    # We stub it here to allow tests to run without requiring the module to be installed
+    function New-GuestConfigurationPackage {
+        [CmdletBinding()]
+        param(
+            [Parameter(Mandatory)]
+            [string]$Name,
+            
+            [Parameter(Mandatory)]
+            [string]$Configuration,
+            
+            [Parameter(Mandatory)]
+            [string]$Path,
+            
+            [Parameter()]
+            [string]$Type,
+            
+            [Parameter()]
+            [switch]$Force
+        )
+        
+        # Return object structure similar to actual New-GuestConfigurationPackage output
+        $packagePath = Join-Path $Path "$Name.zip"
+        return [PSCustomObject]@{
+            Path = $packagePath
+            Name = $Name
+            Configuration = $Configuration
+        }
+    }
+    
+    # Create a stub function for DSC Configuration execution (used when dot-sourcing config files)
+    function SimpleDscConfiguration {
+        param()
+        # Create a mock MOF file output
+        $currentLocation = Get-Location
+        $configFolder = Join-Path $currentLocation "SimpleDscConfiguration"
+        New-Item -ItemType Directory -Path $configFolder -Force | Out-Null
+        $mofPath = Join-Path $configFolder "localhost.mof"
+        "Mock MOF content" | Out-File -FilePath $mofPath -Force
+        return Get-Item $mofPath
+    }
 }
 
 Describe 'Invoking Publish-GuestConfigurationPackage with minimal parameters' {
