@@ -359,16 +359,16 @@ jobs:
           Write-Host ""
 
           $notes = @"
-          ## GuestConfigurationHelper v$version
+## GuestConfigurationHelper v$version
 
-          ### Changes
-          $commits
+### Changes
+$commits
 
-          ### Installation
-          ```powershell
-          Install-Module -Name GuestConfigurationHelper -RequiredVersion $version
-          ```
-          "@
+### Installation
+```powershell
+Install-Module -Name GuestConfigurationHelper -RequiredVersion $version
+```
+"@
 
           # Write to file to preserve multiline content
           $notes | Out-File -FilePath release-notes.txt -Encoding utf8
