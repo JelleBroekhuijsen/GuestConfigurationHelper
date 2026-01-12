@@ -261,6 +261,9 @@ jobs:
           
           echo "exists=$($exists.ToString().ToLower())" >> $env:GITHUB_OUTPUT
           echo "tag=$tag" >> $env:GITHUB_OUTPUT
+          
+          # Ensure script exits with success code
+          exit 0
 
       - name: Package module for release
         if: steps.check-release.outputs.exists == 'false'
