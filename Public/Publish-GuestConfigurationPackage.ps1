@@ -86,12 +86,51 @@ function Publish-GuestConfigurationPackage {
     }
     
     process {
-        . $configurationFile.FullName
-        if ($ConfigurationParameters) {
-            & $configurationName @ConfigurationParameters -ErrorAction Stop
+        # Invoke DSC configuration in Windows PowerShell to avoid compatibility issues
+        # PowerShell 7 has type conversion issues with Import-DscResource's internal parameters
+        if ($PSVersionTable.PSVersion.Major -ge 7) {
+            # Running in PowerShell 7+, invoke via Windows PowerShell
+            $tempScript = Join-Path -Path $env:TEMP -ChildPath "GCH_Script_$(New-Guid).ps1"
+            $tempParams = Join-Path -Path $env:TEMP -ChildPath "GCH_Params_$(New-Guid).xml"
+            try {
+                # Create temporary script to invoke in Windows PowerShell
+                $scriptContent = @"
+Set-Location -Path '$pwd'
+. '$($configurationFile.FullName)'
+"@
+                if ($ConfigurationParameters) {
+                    # Export parameters to CliXml for safe transfer
+                    $ConfigurationParameters | Export-Clixml -Path $tempParams -Depth 10
+                    $scriptContent += "`n`$params = Import-Clixml -Path '$tempParams'"
+                    $scriptContent += "`n& $configurationName @params -ErrorAction Stop"
+                } else {
+                    $scriptContent += "`n& $configurationName -ErrorAction Stop"
+                }
+                
+                Set-Content -Path $tempScript -Value $scriptContent -Encoding UTF8
+                $result = powershell.exe -NoProfile -ExecutionPolicy Bypass -File $tempScript
+                if ($LASTEXITCODE -ne 0) {
+                    throw "Failed to generate MOF file from configuration. Exit code: $LASTEXITCODE"
+                }
+            }
+            finally {
+                if (Test-Path -Path $tempScript) {
+                    Remove-Item -Path $tempScript -Force -ErrorAction SilentlyContinue
+                }
+                if (Test-Path -Path $tempParams) {
+                    Remove-Item -Path $tempParams -Force -ErrorAction SilentlyContinue
+                }
+            }
         } else {
-            & $configurationName -ErrorAction Stop
+            # Already in Windows PowerShell, invoke directly
+            . $configurationFile.FullName
+            if ($ConfigurationParameters) {
+                & $configurationName @ConfigurationParameters -ErrorAction Stop
+            } else {
+                & $configurationName -ErrorAction Stop
+            }
         }
+        
         $mofFile = Get-Item (Join-Path -Path $pwd -ChildPath $configurationName -AdditionalChildPath "localhost.mof") -ErrorAction SilentlyContinue
         
         if (-not $mofFile) {
