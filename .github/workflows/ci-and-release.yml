@@ -136,9 +136,9 @@ jobs:
           $commits
 
           ### Installation
-          ``````powershell
+          ```powershell
           Install-Module -Name GuestConfigurationHelper -RequiredVersion $version
-          ``````
+          ```
           "@
 
           # Write to file to preserve multiline content
