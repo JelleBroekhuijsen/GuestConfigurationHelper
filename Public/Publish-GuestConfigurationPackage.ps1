@@ -104,7 +104,7 @@ function Publish-GuestConfigurationPackage {
         if($OverrideDefaultConfigurationName) {
             Rename-Item (Join-Path -Path $pwd -ChildPath $configurationName) -NewName $OverrideDefaultConfigurationName -ErrorAction Stop
             $configurationName = $OverrideDefaultConfigurationName
-            $mofFile = Get-Item -Path "$pwd\$configurationName\localhost.mof"
+            $mofFile = Get-Item (Join-Path -Path $pwd -ChildPath $configurationName -AdditionalChildPath "localhost.mof")
         }
 
         $ConfigurationMofFile = Join-Path -Path $pwd -ChildPath "$configurationName" -AdditionalChildPath "$configurationName.mof"
