@@ -79,7 +79,7 @@ function Write-WorkflowError {
     
     Write-Host "##[error]$Message" -ForegroundColor Red
     foreach ($key in $Details.Keys) {
-        Write-Host "##[error]  $key`: $($Details[$key])" -ForegroundColor Red
+        Write-Host "##[error]  $key: $($Details[$key])" -ForegroundColor Red
     }
 }
 
