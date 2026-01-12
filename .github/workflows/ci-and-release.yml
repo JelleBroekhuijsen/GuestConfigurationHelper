@@ -153,9 +153,9 @@ jobs:
         run: |
           $version = "${{ steps.get-version.outputs.version }}"
           $tag = "v$version"
-          
+
           gh release view $tag 2>&1 | Out-Null
-          
+
           if ($LASTEXITCODE -eq 0) {
             $exists = $true
             Write-Host "Release $tag already exists"
@@ -175,12 +175,12 @@ jobs:
           $moduleName = "${{ steps.get-version.outputs.module_name }}"
           $version = "${{ steps.get-version.outputs.version }}"
           $zipName = "$moduleName-$version.zip"
-          
+
           # Compress from within the publish directory to avoid nested structure
           Push-Location publish
           Compress-Archive -Path "$moduleName/*" -DestinationPath "../$zipName" -Force
           Pop-Location
-          
+
           Write-Host "✓ Created $zipName" -ForegroundColor Green
 
       - name: Generate release notes
