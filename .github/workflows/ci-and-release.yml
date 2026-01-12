@@ -1,0 +1,178 @@
+name: CI and Release
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  test-and-analyze:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install required PowerShell modules
+        shell: pwsh
+        run: |
+          Write-Host "Installing Pester..." -ForegroundColor Cyan
+          Install-Module -Name Pester -Force -SkipPublisherCheck -Scope CurrentUser
+          Write-Host "Installing PSScriptAnalyzer..." -ForegroundColor Cyan
+          Install-Module -Name PSScriptAnalyzer -Force -SkipPublisherCheck -Scope CurrentUser
+          Write-Host "✓ Modules installed" -ForegroundColor Green
+
+      - name: Run PSScriptAnalyzer
+        shell: pwsh
+        run: |
+          Write-Host "Running PSScriptAnalyzer..." -ForegroundColor Cyan
+          $results = Invoke-ScriptAnalyzer -Path . -Recurse -Settings PSGallery
+
+          if ($results) {
+            Write-Host "PSScriptAnalyzer found $($results.Count) issue(s):" -ForegroundColor Yellow
+            $results | Format-Table -AutoSize
+
+            $errors = $results | Where-Object { $_.Severity -eq 'Error' }
+            $warnings = $results | Where-Object { $_.Severity -eq 'Warning' }
+
+            Write-Host "`nSummary:" -ForegroundColor Cyan
+            Write-Host "  Errors: $($errors.Count)" -ForegroundColor Red
+            Write-Host "  Warnings: $($warnings.Count)" -ForegroundColor Yellow
+
+            if ($errors.Count -gt 0) {
+              Write-Error "PSScriptAnalyzer found $($errors.Count) error(s). Please fix them before merging."
+              exit 1
+            }
+          } else {
+            Write-Host "✓ No issues found by PSScriptAnalyzer" -ForegroundColor Green
+          }
+
+      - name: Run Pester tests
+        shell: pwsh
+        run: |
+          Write-Host "Running Pester tests..." -ForegroundColor Cyan
+
+          $config = New-PesterConfiguration
+          $config.Run.Path = './Tests'
+          $config.Run.Exit = $true
+          $config.TestResult.Enabled = $true
+          $config.TestResult.OutputPath = 'testResults.xml'
+          $config.Output.Verbosity = 'Detailed'
+
+          Invoke-Pester -Configuration $config
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: testResults.xml
+
+  create-release:
+    needs: test-and-analyze
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get module version
+        id: get-version
+        shell: pwsh
+        run: |
+          $manifestPath = Join-Path $env:GITHUB_WORKSPACE "GuestConfigurationHelper.psd1"
+          $manifest = Import-PowerShellDataFile -Path $manifestPath
+          $version = $manifest.ModuleVersion
+          Write-Host "Module version: $version"
+          echo "version=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Check if release exists
+        id: check-release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $version = "${{ steps.get-version.outputs.version }}"
+          $tag = "v$version"
+          
+          try {
+            gh release view $tag 2>&1 | Out-Null
+            $exists = $true
+            Write-Host "Release $tag already exists"
+          }
+          catch {
+            $exists = $false
+            Write-Host "Release $tag does not exist"
+          }
+
+          echo "exists=$($exists.ToString().ToLower())" >> $env:GITHUB_OUTPUT
+          echo "tag=$tag" >> $env:GITHUB_OUTPUT
+
+      - name: Generate release notes
+        id: release-notes
+        if: steps.check-release.outputs.exists == 'false'
+        shell: pwsh
+        run: |
+          $version = "${{ steps.get-version.outputs.version }}"
+          
+          # Get commits since last tag
+          $lastTag = git describe --tags --abbrev=0 2>&1
+          if ($LASTEXITCODE -eq 0) {
+            $commits = git log "$lastTag..HEAD" --pretty=format:"- %s (%h)" 2>&1
+          } else {
+            $commits = git log --pretty=format:"- %s (%h)" 2>&1
+          }
+
+          $notes = @"
+          ## GuestConfigurationHelper v$version
+
+          ### Changes
+          $commits
+
+          ### Installation
+          ``````powershell
+          Install-Module -Name GuestConfigurationHelper -RequiredVersion $version
+          ``````
+          "@
+
+          # Write to file to preserve multiline content
+          $notes | Out-File -FilePath release-notes.txt -Encoding utf8
+          Write-Host "Release notes generated"
+
+      - name: Create GitHub release
+        if: steps.check-release.outputs.exists == 'false'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "${{ steps.check-release.outputs.tag }}"
+          $notes = Get-Content -Path release-notes.txt -Raw
+
+          Write-Host "Creating release $tag..." -ForegroundColor Cyan
+
+          gh release create $tag `
+            --title "Release $tag" `
+            --notes $notes `
+            --verify-tag=false
+
+          Write-Host "✓ Release $tag created successfully" -ForegroundColor Green
+
+      - name: Release summary
+        if: steps.check-release.outputs.exists == 'false'
+        shell: pwsh
+        run: |
+          $tag = "${{ steps.check-release.outputs.tag }}"
+          Write-Host "================================================" -ForegroundColor Green
+          Write-Host "Release Created Successfully!" -ForegroundColor Green
+          Write-Host "================================================" -ForegroundColor Green
+          Write-Host ""
+          Write-Host "Tag: $tag" -ForegroundColor Cyan
+          Write-Host "Release URL: ${{ github.server_url }}/${{ github.repository }}/releases/tag/$tag" -ForegroundColor Cyan
+          Write-Host ""
+          Write-Host "The publish workflow will now automatically publish to PowerShell Gallery" -ForegroundColor Yellow
