@@ -2,7 +2,18 @@ BeforeAll {
     . $PSScriptRoot\..\Public\Publish-GuestConfigurationPackage.ps1
     . $PSScriptRoot\..\Private\Test-ConfigurationFileSizeOnDisk.ps1
     . $PSScriptRoot\..\Private\Compress-ConfigurationFileSizeOnDisk.ps1
-
+    
+    # Create a stub function for the external New-GuestConfigurationPackage command
+    function New-GuestConfigurationPackage {
+        param(
+            [string]$Name,
+            [string]$Configuration,
+            [string]$Path,
+            [string]$Type,
+            [switch]$Force
+        )
+        return @{Path = Join-Path $Path "$Name.zip" }
+    }
 }
 
 Describe 'Invoking Publish-GuestConfigurationPackage with minimal parameters' {
