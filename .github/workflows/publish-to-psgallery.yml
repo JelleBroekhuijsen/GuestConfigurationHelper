@@ -14,16 +14,68 @@ jobs:
     permissions:
       contents: read
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - name: Get release information
+        id: release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $moduleName = $env:MODULE_NAME
+          
+          if ("${{ github.event_name }}" -eq "release") {
+            $tag = "${{ github.event.release.tag_name }}"
+            $version = $tag -replace '^v', ''
+            Write-Host "Release event - Tag: $tag, Version: $version"
+          } else {
+            Write-Host "Manual workflow dispatch - will need to specify version"
+            # For manual runs, we'll download from latest release
+            $latestRelease = gh release view --json tagName,name --repo ${{ github.repository }} | ConvertFrom-Json
+            $tag = $latestRelease.tagName
+            $version = $tag -replace '^v', ''
+            Write-Host "Using latest release - Tag: $tag, Version: $version"
+          }
+          
+          echo "tag=$tag" >> $env:GITHUB_OUTPUT
+          echo "version=$version" >> $env:GITHUB_OUTPUT
+          echo "asset_name=$moduleName-$version.zip" >> $env:GITHUB_OUTPUT
 
-      - name: Validate module manifest
+      - name: Download module package from release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "${{ steps.release.outputs.tag }}"
+          $assetName = "${{ steps.release.outputs.asset_name }}"
+          
+          Write-Host "Downloading $assetName from release $tag..." -ForegroundColor Cyan
+          
+          gh release download $tag --pattern $assetName --repo ${{ github.repository }}
+          
+          if (-not (Test-Path $assetName)) {
+            Write-Error "Failed to download release asset: $assetName"
+            exit 1
+          }
+          
+          Write-Host "✓ Downloaded $assetName" -ForegroundColor Green
+
+      - name: Extract module package
+        shell: pwsh
+        run: |
+          $assetName = "${{ steps.release.outputs.asset_name }}"
+          
+          Write-Host "Extracting module package..." -ForegroundColor Cyan
+          Expand-Archive -Path $assetName -DestinationPath . -Force
+          
+          Write-Host "✓ Module package extracted" -ForegroundColor Green
+
+      - name: Validate module artifact
         id: validate
         shell: pwsh
         run: |
-          Write-Host "Validating module manifest..." -ForegroundColor Cyan
+          Write-Host "Validating module artifact..." -ForegroundColor Cyan
           $moduleName = $env:MODULE_NAME
-          $manifestPath = Join-Path $env:GITHUB_WORKSPACE "$moduleName.psd1"
+          $moduleDir = Join-Path $env:GITHUB_WORKSPACE $moduleName
+          $manifestPath = Join-Path $moduleDir "$moduleName.psd1"
 
           if (-not (Test-Path $manifestPath)) {
             Write-Error "Module manifest not found at: $manifestPath"
@@ -41,32 +93,12 @@ jobs:
             # Set outputs for later steps
             echo "module_name=$($manifest.Name)" >> $env:GITHUB_OUTPUT
             echo "module_version=$($manifest.Version)" >> $env:GITHUB_OUTPUT
+            echo "module_path=$moduleDir" >> $env:GITHUB_OUTPUT
           }
           catch {
             Write-Error "Module manifest validation failed: $_"
             exit 1
           }
-
-      - name: Install Pester
-        shell: pwsh
-        run: |
-          Write-Host "Installing Pester..." -ForegroundColor Cyan
-          Install-Module -Name Pester -Force -SkipPublisherCheck -Scope CurrentUser
-          Write-Host "✓ Pester installed" -ForegroundColor Green
-
-      - name: Run tests
-        shell: pwsh
-        run: |
-          Write-Host "Running tests..." -ForegroundColor Cyan
-
-          $config = New-PesterConfiguration
-          $config.Run.Path = './Tests'
-          $config.Run.Exit = $true
-          $config.Output.Verbosity = 'Detailed'
-
-          Invoke-Pester -Configuration $config
-
-          Write-Host "✓ All tests passed" -ForegroundColor Green
 
       - name: Check if version exists in PowerShell Gallery
         shell: pwsh
@@ -102,45 +134,6 @@ jobs:
             exit 1
           }
 
-      - name: Prepare module for publishing
-        shell: pwsh
-        run: |
-          Write-Host "Preparing module for publishing..." -ForegroundColor Cyan
-          $moduleName = "${{ steps.validate.outputs.module_name }}"
-          $publishDir = Join-Path $env:GITHUB_WORKSPACE "publish"
-          $moduleDir = Join-Path $publishDir $moduleName
-          
-          # Create publish directory structure
-          New-Item -ItemType Directory -Path $moduleDir -Force | Out-Null
-          
-          # Copy module files (excluding repository metadata, tests, etc.)
-          $filesToCopy = @(
-            "$moduleName.psd1",
-            "$moduleName.psm1",
-            "Helpers.ps1"
-          )
-          
-          foreach ($file in $filesToCopy) {
-            $sourcePath = Join-Path $env:GITHUB_WORKSPACE $file
-            if (Test-Path $sourcePath) {
-              Copy-Item -Path $sourcePath -Destination $moduleDir -Force
-              Write-Host "  Copied: $file" -ForegroundColor Gray
-            }
-          }
-          
-          # Copy directories
-          $dirsToPublish = @('Public', 'Private')
-          foreach ($dir in $dirsToPublish) {
-            $sourcePath = Join-Path $env:GITHUB_WORKSPACE $dir
-            if (Test-Path $sourcePath) {
-              Copy-Item -Path $sourcePath -Destination $moduleDir -Recurse -Force
-              Write-Host "  Copied directory: $dir" -ForegroundColor Gray
-            }
-          }
-          
-          Write-Host "✓ Module prepared for publishing at: $moduleDir" -ForegroundColor Green
-          echo "publish_path=$moduleDir" >> $env:GITHUB_ENV
-
       - name: Publish module to PowerShell Gallery
         shell: pwsh
         env:
@@ -155,7 +148,7 @@ jobs:
 
           try {
             $publishParams = @{
-              Path        = $env:publish_path
+              Path        = "${{ steps.validate.outputs.module_path }}"
               NuGetApiKey = $env:PSGALLERY_API_KEY
               Repository  = 'PSGallery'
               Verbose     = $true

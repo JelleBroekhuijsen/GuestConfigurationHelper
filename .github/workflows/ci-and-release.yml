@@ -91,6 +91,64 @@ jobs:
           $version = $manifest.ModuleVersion
           Write-Host "Module version: $version"
           echo "version=$version" >> $env:GITHUB_OUTPUT
+          echo "module_name=$($manifest.RootModule -replace '\.psm1$','')" >> $env:GITHUB_OUTPUT
+
+      - name: Prepare module artifact
+        shell: pwsh
+        run: |
+          Write-Host "Preparing module artifact..." -ForegroundColor Cyan
+          $moduleName = "${{ steps.get-version.outputs.module_name }}"
+          $publishDir = Join-Path $env:GITHUB_WORKSPACE "publish"
+          $moduleDir = Join-Path $publishDir $moduleName
+
+          # Create publish directory structure
+          New-Item -ItemType Directory -Path $moduleDir -Force | Out-Null
+
+          # Copy module files (excluding repository metadata, tests, etc.)
+          $filesToCopy = @(
+            "$moduleName.psd1",
+            "$moduleName.psm1",
+            "Helpers.ps1"
+          )
+
+          foreach ($file in $filesToCopy) {
+            $sourcePath = Join-Path $env:GITHUB_WORKSPACE $file
+            if (Test-Path $sourcePath) {
+              Copy-Item -Path $sourcePath -Destination $moduleDir -Force
+              Write-Host "  Copied: $file" -ForegroundColor Gray
+            }
+          }
+
+          # Copy directories
+          $dirsToPublish = @('Public', 'Private')
+          foreach ($dir in $dirsToPublish) {
+            $sourcePath = Join-Path $env:GITHUB_WORKSPACE $dir
+            if (Test-Path $sourcePath) {
+              Copy-Item -Path $sourcePath -Destination $moduleDir -Recurse -Force
+              Write-Host "  Copied directory: $dir" -ForegroundColor Gray
+            }
+          }
+
+          Write-Host "✓ Module prepared at: $moduleDir" -ForegroundColor Green
+
+      - name: Upload module artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: module-package
+          path: publish/
+          retention-days: 90
+
+      - name: Package module for release
+        if: steps.check-release.outputs.exists == 'false'
+        shell: pwsh
+        run: |
+          Write-Host "Creating module package zip..." -ForegroundColor Cyan
+          $moduleName = "${{ steps.get-version.outputs.module_name }}"
+          $version = "${{ steps.get-version.outputs.version }}"
+          $zipName = "$moduleName-$version.zip"
+          
+          Compress-Archive -Path "publish/*" -DestinationPath $zipName -Force
+          Write-Host "✓ Created $zipName" -ForegroundColor Green
 
       - name: Check if release exists
         id: check-release
@@ -153,15 +211,19 @@ jobs:
         run: |
           $tag = "${{ steps.check-release.outputs.tag }}"
           $notes = Get-Content -Path release-notes.txt -Raw
+          $moduleName = "${{ steps.get-version.outputs.module_name }}"
+          $version = "${{ steps.get-version.outputs.version }}"
+          $zipName = "$moduleName-$version.zip"
 
           Write-Host "Creating release $tag..." -ForegroundColor Cyan
 
           gh release create $tag `
             --title "Release $tag" `
             --notes $notes `
-            --verify-tag=false
+            --verify-tag=false `
+            $zipName
 
-          Write-Host "✓ Release $tag created successfully" -ForegroundColor Green
+          Write-Host "✓ Release $tag created successfully with module package" -ForegroundColor Green
 
       - name: Release summary
         if: steps.check-release.outputs.exists == 'false'
