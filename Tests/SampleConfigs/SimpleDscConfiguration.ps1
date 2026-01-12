@@ -1,8 +1,9 @@
 Configuration SimpleDscConfiguration {
   param()
-  Import-DscResource -ModuleName 'PSDscResources' 
-  Service SampleService {
-    Name  = 'SampleService'
-    State = 'Running'
+  Import-DscResource -ModuleName 'PSDscResources'
+  File SampleFile {
+    DestinationPath = 'C:\temp\sample.txt'
+    Contents        = 'test'
+    Ensure          = 'Present'
   }
 }
