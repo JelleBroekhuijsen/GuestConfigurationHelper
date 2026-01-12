@@ -38,7 +38,8 @@ BeforeAll {
     function SimpleDscConfiguration {
         param()
         # Create a mock MOF file output
-        $configFolder = Join-Path $pwd "SimpleDscConfiguration"
+        $currentLocation = Get-Location
+        $configFolder = Join-Path $currentLocation "SimpleDscConfiguration"
         New-Item -ItemType Directory -Path $configFolder -Force | Out-Null
         $mofPath = Join-Path $configFolder "localhost.mof"
         "Mock MOF content" | Out-File -FilePath $mofPath -Force

@@ -47,9 +47,9 @@ function New-GuestConfigurationPackage {
     # This requires the GuestConfiguration module to be installed
     try {
         # Get the external command, excluding commands from the current module to avoid calling this wrapper recursively
-        $currentModuleName = $MyInvocation.MyCommand.Module.Name
+        $currentModuleName = if ($MyInvocation.MyCommand.Module) { $MyInvocation.MyCommand.Module.Name } else { $null }
         $externalCommand = Get-Command -Name 'New-GuestConfigurationPackage' -CommandType Cmdlet, Function -ErrorAction Stop | 
-            Where-Object { $_.Module.Name -ne $currentModuleName } |
+            Where-Object { -not $currentModuleName -or $_.Module.Name -ne $currentModuleName } |
             Select-Object -First 1
         
         if (-not $externalCommand) {
