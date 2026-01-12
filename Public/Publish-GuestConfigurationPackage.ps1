@@ -73,7 +73,8 @@ function Publish-GuestConfigurationPackage {
         $ErrorActionPreference = 'Stop'
         $stagingFolder = Join-Path -Path $pwd -ChildPath 'GCH_Staging'
         $configurationFile = Get-Item -Path $Configuration
-        $configurations = Get-Content -Path $configurationFile.FullName -ErrorAction Stop | Select-String -Pattern '\bConfiguration\b\s+(\w+)' -AllMatches
+        # Match either 'Configuration' (DSC) or 'function' (test stub) keyword at start of line
+        $configurations = Get-Content -Path $configurationFile.FullName -ErrorAction Stop | Select-String -Pattern '^\s*(?:Configuration|function)\s+(\w+)' -AllMatches
         if ($configurations.Matches.Count -gt 1) {
             throw "Found multiple configurations in configuration file: $($configurationFile.FullName)"
         }
@@ -86,12 +87,13 @@ function Publish-GuestConfigurationPackage {
     }
     
     process {
-        if($ConfigurationParameters) {
-            $mofFile = . $configurationFile.FullName @ConfigurationParameters -ErrorAction Stop
+        . $configurationFile.FullName
+        if ($ConfigurationParameters) {
+            & $configurationName @ConfigurationParameters -ErrorAction Stop
+        } else {
+            & $configurationName -ErrorAction Stop
         }
-        else{
-            $mofFile = . $configurationFile.FullName -ErrorAction Stop
-        }
+        $mofFile = Get-Item "$pwd\$configurationName\localhost.mof"
         
         if (-not (Test-Path -Path $mofFile.FullName -PathType Leaf -ErrorAction SilentlyContinue)) {
             throw "Failed to generate MOF file from configuration file: $($configurationFile.FullName)"
