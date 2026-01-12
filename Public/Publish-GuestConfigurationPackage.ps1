@@ -73,7 +73,7 @@ function Publish-GuestConfigurationPackage {
         $ErrorActionPreference = 'Stop'
         $stagingFolder = Join-Path -Path $pwd -ChildPath 'GCH_Staging'
         $configurationFile = Get-Item -Path $Configuration
-        $configurations = Get-Content -Path $configurationFile.FullName -ErrorAction Stop | Select-String -Pattern '\bConfiguration\b\s+(\w+)' -AllMatches
+        $configurations = Get-Content -Path $configurationFile.FullName -ErrorAction Stop | Select-String -Pattern '^\s*Configuration\s+(\w+)' -AllMatches
         if ($configurations.Matches.Count -gt 1) {
             throw "Found multiple configurations in configuration file: $($configurationFile.FullName)"
         }
@@ -86,14 +86,15 @@ function Publish-GuestConfigurationPackage {
     }
     
     process {
-        if($ConfigurationParameters) {
-            $mofFile = . $configurationFile.FullName @ConfigurationParameters -ErrorAction Stop
+        . $configurationFile.FullName
+        if ($ConfigurationParameters) {
+            & $configurationName @ConfigurationParameters -ErrorAction Stop
+        } else {
+            & $configurationName -ErrorAction Stop
         }
-        else{
-            $mofFile = . $configurationFile.FullName -ErrorAction Stop
-        }
+        $mofFile = Get-Item (Join-Path -Path $pwd -ChildPath $configurationName -AdditionalChildPath "localhost.mof") -ErrorAction SilentlyContinue
         
-        if (-not (Test-Path -Path $mofFile.FullName -PathType Leaf -ErrorAction SilentlyContinue)) {
+        if (-not $mofFile) {
             throw "Failed to generate MOF file from configuration file: $($configurationFile.FullName)"
         }   
         else {
@@ -103,7 +104,7 @@ function Publish-GuestConfigurationPackage {
         if($OverrideDefaultConfigurationName) {
             Rename-Item (Join-Path -Path $pwd -ChildPath $configurationName) -NewName $OverrideDefaultConfigurationName -ErrorAction Stop
             $configurationName = $OverrideDefaultConfigurationName
-            $mofFile = Get-Item -Path "$pwd\$configurationName\localhost.mof"
+            $mofFile = Get-Item (Join-Path -Path $pwd -ChildPath $configurationName -AdditionalChildPath "localhost.mof")
         }
 
         $ConfigurationMofFile = Join-Path -Path $pwd -ChildPath "$configurationName" -AdditionalChildPath "$configurationName.mof"

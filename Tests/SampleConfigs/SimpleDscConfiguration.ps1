@@ -6,5 +6,3 @@ Configuration SimpleDscConfiguration {
     State = 'Running'
   }
 }
-
-SimpleDscConfiguration
