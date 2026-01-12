@@ -1,0 +1,93 @@
+name: Publish to PowerShell Gallery
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate module manifest
+        shell: pwsh
+        run: |
+          Write-Host "Validating module manifest..." -ForegroundColor Cyan
+          $manifestPath = Join-Path $env:GITHUB_WORKSPACE "GuestConfigurationHelper.psd1"
+
+          if (-not (Test-Path $manifestPath)) {
+            Write-Error "Module manifest not found at: $manifestPath"
+            exit 1
+          }
+
+          try {
+            $manifest = Test-ModuleManifest -Path $manifestPath -ErrorAction Stop
+            Write-Host "✓ Module manifest is valid" -ForegroundColor Green
+            Write-Host "  Module Name: $($manifest.Name)" -ForegroundColor Gray
+            Write-Host "  Version: $($manifest.Version)" -ForegroundColor Gray
+            Write-Host "  Author: $($manifest.Author)" -ForegroundColor Gray
+            Write-Host "  Description: $($manifest.Description)" -ForegroundColor Gray
+          }
+          catch {
+            Write-Error "Module manifest validation failed: $_"
+            exit 1
+          }
+
+      - name: Publish module to PowerShell Gallery
+        shell: pwsh
+        env:
+          PSGALLERY_API_KEY: ${{ secrets.PS_GALLERY_API_KEY }}
+        run: |
+          Write-Host "Publishing module to PowerShell Gallery..." -ForegroundColor Cyan
+
+          if ([string]::IsNullOrEmpty($env:PSGALLERY_API_KEY)) {
+            Write-Error "PS_GALLERY_API_KEY secret is not set"
+            exit 1
+          }
+
+          try {
+            $publishParams = @{
+              Path        = $env:GITHUB_WORKSPACE
+              NuGetApiKey = $env:PSGALLERY_API_KEY
+              Repository  = 'PSGallery'
+              Verbose     = $true
+              ErrorAction = 'Stop'
+            }
+
+            Publish-Module @publishParams
+
+            Write-Host "✓ Module published successfully to PowerShell Gallery" -ForegroundColor Green
+            
+            # Get module version for output
+            $manifestPath = Join-Path $env:GITHUB_WORKSPACE "GuestConfigurationHelper.psd1"
+            $manifest = Import-PowerShellDataFile -Path $manifestPath
+            $version = $manifest.ModuleVersion
+            Write-Host "  Published Version: $version" -ForegroundColor Gray
+            Write-Host "  Module URL: https://www.powershellgallery.com/packages/GuestConfigurationHelper/$version" -ForegroundColor Gray
+          }
+          catch {
+            Write-Error "Failed to publish module: $_"
+            exit 1
+          }
+
+      - name: Summary
+        if: success()
+        shell: pwsh
+        run: |
+          $manifestPath = Join-Path $env:GITHUB_WORKSPACE "GuestConfigurationHelper.psd1"
+          $manifest = Import-PowerShellDataFile -Path $manifestPath
+          $version = $manifest.ModuleVersion
+          
+          Write-Host "================================================" -ForegroundColor Green
+          Write-Host "Module Successfully Published!" -ForegroundColor Green
+          Write-Host "================================================" -ForegroundColor Green
+          Write-Host ""
+          Write-Host "Module Name: GuestConfigurationHelper" -ForegroundColor Cyan
+          Write-Host "Version: $version" -ForegroundColor Cyan
+          Write-Host "Gallery URL: https://www.powershellgallery.com/packages/GuestConfigurationHelper/$version" -ForegroundColor Cyan
+          Write-Host ""
+          Write-Host "Users can now install with:" -ForegroundColor Yellow
+          Write-Host "  Install-Module -Name GuestConfigurationHelper -RequiredVersion $version" -ForegroundColor White
