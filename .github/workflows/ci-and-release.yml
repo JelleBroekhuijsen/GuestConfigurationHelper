@@ -365,9 +365,14 @@ jobs:
           try {
             # Compress from within the publish directory to avoid nested structure
             $currentLocation = Get-Location
-            Set-Location $publishDir
-            Compress-Archive -Path "$moduleName/*" -DestinationPath "$env:GITHUB_WORKSPACE/$zipName" -Force -ErrorAction Stop
-            Set-Location $currentLocation
+            try {
+              Set-Location $publishDir
+              Compress-Archive -Path "$moduleName/*" -DestinationPath "$env:GITHUB_WORKSPACE/$zipName" -Force -ErrorAction Stop
+            }
+            finally {
+              # Ensure we always restore the location, even if Compress-Archive fails
+              Set-Location $currentLocation
+            }
             
             $zipPath = Join-Path $env:GITHUB_WORKSPACE $zipName
             if (Test-Path $zipPath) {

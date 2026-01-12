@@ -97,15 +97,31 @@ Write-WorkflowError -Message "Module manifest not found!" -Details @{
 ```powershell
 # workflow-helpers.ps1
 function Test-RequiredFile {
-    param([string]$Path, [string]$Description)
+    param(
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
+        [string]$Path,
+        
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
+        [string]$Description
+    )
     
-    if (-not (Test-Path $Path)) {
-        Write-Host "##[error]Required file not found: $Description" -ForegroundColor Red
-        Write-Host "##[error]Expected path: $Path" -ForegroundColor Red
-        Write-Host "##[error]Current directory: $(Get-Location)" -ForegroundColor Red
+    try {
+        if (-not (Test-Path $Path -ErrorAction Stop)) {
+            Write-Host "##[error]Required file not found: $Description" -ForegroundColor Red
+            Write-Host "##[error]Expected path: $Path" -ForegroundColor Red
+            Write-Host "##[error]Current directory: $(Get-Location)" -ForegroundColor Red
+            exit 1
+        }
+        Write-Host "✓ Found: $Description" -ForegroundColor Green
+    }
+    catch {
+        Write-Host "##[error]Failed to check file existence: $Description" -ForegroundColor Red
+        Write-Host "##[error]Path: $Path" -ForegroundColor Red
+        Write-Host "##[error]Error: $_" -ForegroundColor Red
         exit 1
     }
-    Write-Host "✓ Found: $Description" -ForegroundColor Green
 }
 
 function Invoke-SafeCopy {
@@ -162,31 +178,50 @@ Then dot-source in workflows:
 ```powershell
 function Assert-DirectoryExists {
     param(
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
         [string]$Path,
+        
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
         [string]$Description,
+        
         [switch]$Create
     )
     
-    if (-not (Test-Path $Path)) {
-        if ($Create) {
-            try {
-                New-Item -ItemType Directory -Path $Path -Force | Out-Null
-                Write-Host "✓ Created directory: $Description" -ForegroundColor Green
+    try {
+        if (-not (Test-Path $Path -ErrorAction Stop)) {
+            if ($Create) {
+                try {
+                    New-Item -ItemType Directory -Path $Path -Force -ErrorAction Stop | Out-Null
+                    Write-Host "✓ Created directory: $Description" -ForegroundColor Green
+                }
+                catch {
+                    Write-Host "##[error]Failed to create directory: $Description" -ForegroundColor Red
+                    Write-Host "##[error]Path: $Path" -ForegroundColor Red
+                    Write-Host "##[error]Error: $_" -ForegroundColor Red
+                    exit 1
+                }
             }
-            catch {
-                Write-Host "##[error]Failed to create directory: $Description" -ForegroundColor Red
-                Write-Host "##[error]Path: $Path" -ForegroundColor Red
-                Write-Host "##[error]Error: $_" -ForegroundColor Red
+            else {
+                Write-Host "##[error]Directory not found: $Description" -ForegroundColor Red
+                Write-Host "##[error]Expected path: $Path" -ForegroundColor Red
+                
+                # Safely check parent directory
+                $parentPath = Split-Path $Path -Parent
+                if ($parentPath -and (Test-Path $parentPath -ErrorAction SilentlyContinue)) {
+                    Write-Host "##[error]Contents of parent directory:" -ForegroundColor Red
+                    Get-ChildItem $parentPath -Force -ErrorAction SilentlyContinue | Format-Table Name
+                }
                 exit 1
             }
         }
-        else {
-            Write-Host "##[error]Directory not found: $Description" -ForegroundColor Red
-            Write-Host "##[error]Expected path: $Path" -ForegroundColor Red
-            Write-Host "##[error]Contents of parent directory:" -ForegroundColor Red
-            Get-ChildItem (Split-Path $Path -Parent) -Force | Format-Table Name
-            exit 1
-        }
+    }
+    catch {
+        Write-Host "##[error]Failed to validate directory: $Description" -ForegroundColor Red
+        Write-Host "##[error]Path: $Path" -ForegroundColor Red
+        Write-Host "##[error]Error: $_" -ForegroundColor Red
+        exit 1
     }
 }
 ```
