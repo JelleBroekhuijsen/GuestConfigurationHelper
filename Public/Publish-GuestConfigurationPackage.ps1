@@ -94,23 +94,30 @@ function Publish-GuestConfigurationPackage {
             $tempParams = Join-Path -Path $env:TEMP -ChildPath "GCH_Params_$(New-Guid).xml"
             try {
                 # Create temporary script to invoke in Windows PowerShell
+                $workingDir = $pwd.Path
+                $configFile = $configurationFile.FullName
                 $scriptContent = @"
-Set-Location -Path '$($pwd.Path)'
-. '$($configurationFile.FullName)'
+Set-Location -LiteralPath '$($workingDir -replace "'", "''")'
+. ([ScriptBlock]::Create((Get-Content -LiteralPath '$($configFile -replace "'", "''")' -Raw)))
 "@
                 if ($ConfigurationParameters) {
                     # Export parameters to CliXml for safe transfer
                     $ConfigurationParameters | Export-Clixml -Path $tempParams -Depth 10
-                    $scriptContent += "`n`$params = Import-Clixml -Path '$tempParams'"
+                    $scriptContent += "`n`$params = Import-Clixml -LiteralPath '$($tempParams -replace "'", "''")'
+"
                     $scriptContent += "`n& $configurationName @params -ErrorAction Stop"
                 } else {
                     $scriptContent += "`n& $configurationName -ErrorAction Stop"
                 }
                 
                 Set-Content -Path $tempScript -Value $scriptContent -Encoding UTF8
-                powershell.exe -NoProfile -ExecutionPolicy Bypass -File $tempScript
+                $output = powershell.exe -NoProfile -ExecutionPolicy Bypass -File $tempScript 2>&1
                 if ($LASTEXITCODE -ne 0) {
-                    throw "Failed to generate MOF file from configuration. Exit code: $LASTEXITCODE"
+                    $errorMessage = "Failed to generate MOF file from configuration. Exit code: $LASTEXITCODE"
+                    if ($output) {
+                        $errorMessage += "`nOutput: $($output -join "`n")"
+                    }
+                    throw $errorMessage
                 }
             }
             finally {
