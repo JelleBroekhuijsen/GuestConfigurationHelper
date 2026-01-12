@@ -378,6 +378,9 @@ foreach ($file in $workflowFiles) {
     }
     
     # Check for missing error handling
+    # NOTE: This is a simple heuristic. It only checks for the presence of
+    # file/operation commands and any 'try' block in the file, and may
+    # therefore produce false positives and false negatives.
     if ($content -match 'Invoke-|Copy-Item|New-Item' -and $content -notmatch 'try\s*\{') {
         Write-Warning "Operations without try-catch in $($file.Name)"
     }
