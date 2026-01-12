@@ -1,11 +1,11 @@
 BeforeAll {
     . $PSScriptRoot\..\Public\Publish-GuestConfigurationPackage.ps1
-    . $PSScriptRoot\..\Public\New-GuestConfigurationPackage.ps1
     . $PSScriptRoot\..\Private\Test-ConfigurationFileSizeOnDisk.ps1
     . $PSScriptRoot\..\Private\Compress-ConfigurationFileSizeOnDisk.ps1
     
-    # Override the New-GuestConfigurationPackage wrapper with a test stub
-    # This avoids the need for the actual GuestConfiguration module in tests
+    # Create a stub function for the external New-GuestConfigurationPackage command
+    # This command is from the GuestConfiguration module (external dependency)
+    # We stub it here to allow tests to run without requiring the module to be installed
     function New-GuestConfigurationPackage {
         [CmdletBinding()]
         param(
