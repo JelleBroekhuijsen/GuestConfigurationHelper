@@ -45,6 +45,7 @@ Publish-GuestConfigurationPackage -Configuration "C:\path\to\your\configuration.
 - 1.2.0 - Added support for reducing dependency size of Guest Configuration packages
 - 1.3.0 - Added support for compressing Guest Configuration packages
 - 1.4.0 - Added support for outputting Azure DevOps compatible output variables and overriding configuration name
+- 1.5.0 Improve large configuration object handling and improve testing
 
 ## Roadmap
 
