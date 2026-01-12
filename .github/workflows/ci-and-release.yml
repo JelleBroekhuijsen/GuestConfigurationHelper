@@ -145,22 +145,6 @@ jobs:
           path: publish/
           retention-days: 90
 
-      - name: Package module for release
-        if: steps.check-release.outputs.exists == 'false'
-        shell: pwsh
-        run: |
-          Write-Host "Creating module package zip..." -ForegroundColor Cyan
-          $moduleName = "${{ steps.get-version.outputs.module_name }}"
-          $version = "${{ steps.get-version.outputs.version }}"
-          $zipName = "$moduleName-$version.zip"
-          
-          # Compress from within the publish directory to avoid nested structure
-          Push-Location publish
-          Compress-Archive -Path "$moduleName/*" -DestinationPath "../$zipName" -Force
-          Pop-Location
-          
-          Write-Host "✓ Created $zipName" -ForegroundColor Green
-
       - name: Check if release exists
         id: check-release
         shell: pwsh
@@ -169,19 +153,35 @@ jobs:
         run: |
           $version = "${{ steps.get-version.outputs.version }}"
           $tag = "v$version"
-          
-          try {
-            gh release view $tag 2>&1 | Out-Null
+
+          gh release view $tag 2>&1 | Out-Null
+
+          if ($LASTEXITCODE -eq 0) {
             $exists = $true
             Write-Host "Release $tag already exists"
-          }
-          catch {
+          } else {
             $exists = $false
             Write-Host "Release $tag does not exist"
           }
 
           echo "exists=$($exists.ToString().ToLower())" >> $env:GITHUB_OUTPUT
           echo "tag=$tag" >> $env:GITHUB_OUTPUT
+
+      - name: Package module for release
+        if: steps.check-release.outputs.exists == 'false'
+        shell: pwsh
+        run: |
+          Write-Host "Creating module package zip..." -ForegroundColor Cyan
+          $moduleName = "${{ steps.get-version.outputs.module_name }}"
+          $version = "${{ steps.get-version.outputs.version }}"
+          $zipName = "$moduleName-$version.zip"
+
+          # Compress from within the publish directory to avoid nested structure
+          Push-Location publish
+          Compress-Archive -Path "$moduleName/*" -DestinationPath "../$zipName" -Force
+          Pop-Location
+
+          Write-Host "✓ Created $zipName" -ForegroundColor Green
 
       - name: Generate release notes
         id: release-notes
