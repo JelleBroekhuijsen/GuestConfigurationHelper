@@ -107,23 +107,23 @@ Describe 'Invoking Publish-GuestConfigurationPackage with minimal parameters' {
         }
 
         It 'should call Join-Path with the path to predict the path of the final MOF file' {
-            Should -CommandName Join-Path -Exactly 1 -ParameterFilter { $ChildPath -eq 'SimpleDscConfiguration' -and $AdditionalChildPath -eq 'SimpleDscConfiguration.mof' }
+            Should -CommandName Join-Path -Exactly 1 -ParameterFilter { $ChildPath -eq 'SimpleDscConfigurationMock' -and $AdditionalChildPath -eq 'SimpleDscConfiguration.mof' }
         }
 
         It 'should call Rename-Item to rename the MOF file' {
-            Should -CommandName Rename-Item -Exactly 1 -ParameterFilter { $Path -eq "$pwd\SimpleDscConfiguration\localhost.mof" -and $NewName -eq 'SimpleDscConfiguration.mof' }
+            Should -CommandName Rename-Item -Exactly 1 -ParameterFilter { $Path -eq "$pwd\SimpleDscConfigurationMock\localhost.mof" -and $NewName -eq 'SimpleDscConfiguration.mof' }
         }
 
         It 'should call New-GuestConfigurationPackage to create the package' {
-            Should -CommandName New-GuestConfigurationPackage -Exactly 1 -ParameterFilter { $Name -eq 'SimpleDscConfiguration' -and $Configuration -like '*\SimpleDscConfiguration\SimpleDscConfiguration.mof' }
+            Should -CommandName New-GuestConfigurationPackage -Exactly 1 -ParameterFilter { $Name -eq 'SimpleDscConfigurationMock' -and $Configuration -like '*\SimpleDscConfiguration\SimpleDscConfiguration.mof' }
         }
 
         It 'should call Remove-Item to clean up the temporary files' {
-            Should -CommandName Remove-Item -Exactly 1 -ParameterFilter { $Path -eq "$pwd\SimpleDscConfiguration" -and $Force -eq $true -and $Recurse -eq $true }
+            Should -CommandName Remove-Item -Exactly 1 -ParameterFilter { $Path -eq "$pwd\SimpleDscConfigurationMock" -and $Force -eq $true -and $Recurse -eq $true }
         }
 
         It 'should call Get-FileHash to calculate the hash of the created package' {
-            Should -CommandName Get-FileHash -Exactly 1 -ParameterFilter { $Path -eq "$pwd\SimpleDscConfiguration.zip" }
+            Should -CommandName Get-FileHash -Exactly 1 -ParameterFilter { $Path -eq "$pwd\SimpleDscConfigurationMock.zip" }
         }
 
         It 'should call Test-ConfigurationFileSizeOnDisk to validate the size of the created package' {
@@ -145,7 +145,7 @@ Describe 'Invoking Publish-GuestConfigurationPackage with minimal parameters' {
         }
         It 'should throw an error if it finds multiple configurations in the configuration file' {
             # Need to mock Get-Content before calling the function
-            Mock Get-Content { return @("Configuration SimpleDscConfiguration {}", "Configuration AnotherConfiguration {}") }
+            Mock Get-Content { return @("Configuration SimpleDscConfigurationMock {}", "Configuration AnotherConfiguration {}") }
             { Publish-GuestConfigurationPackage -Configuration "$script:MockConfigPath" } | Should -Throw "Found multiple configurations in configuration file: *"
         }
         It 'should throw an error if it fails to detect configurations in the configuration file' {

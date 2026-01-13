@@ -4,7 +4,7 @@ param (
     $ConfigurationData
 )
 
-Configuration SimpleDscConfiguration {
+Configuration SimpleDscConfigurationWithParameters {
   param()
   Import-DscResource -ModuleName 'PSDscResources'
   Script SampleFile {
@@ -33,4 +33,4 @@ Configuration SimpleDscConfiguration {
   }
 }
 
-SimpleDscConfiguration -ConfigurationData $ConfigurationData
+SimpleDscConfigurationWithParameters -ConfigurationData $ConfigurationData
