@@ -42,6 +42,10 @@ jobs:
         shell: pwsh
         run: ./.github/workflows/scripts/Extract-ModulePackage.ps1 -AssetName "${{ steps.release.outputs.asset_name }}" -ModuleName "${{ env.MODULE_NAME }}"
 
+      - name: Install required PowerShell modules
+        shell: pwsh
+        run: ./.github/workflows/scripts/Install-Modules.ps1
+        
       - name: Validate module artifact
         id: validate
         shell: pwsh
