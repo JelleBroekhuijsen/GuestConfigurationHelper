@@ -4,7 +4,8 @@ BeforeAll {
     . $PSScriptRoot\..\Private\Compress-ConfigurationFileSizeOnDisk.ps1
 
     # Use test-friendly configuration that doesn't require PSDscResources module
-    $script:TestConfigPath = "$PSScriptRoot\SampleConfigs\SimpleDscConfigurationTest.ps1"
+    $script:TestConfigPath = "$PSScriptRoot\SampleConfigs\SimpleDscConfiguration.ps1"
+    $script:TestWithParametersConfigPath = "$PSScriptRoot\SampleConfigs\SimpleDscConfigurationWithParameters.ps1"
     # Mock-friendly configuration for cmdlet invocation tests (does no file I/O when dot-sourced)
     $script:MockConfigPath = "$PSScriptRoot\SampleConfigs\SimpleDscConfigurationMock.ps1"
 
@@ -82,13 +83,13 @@ Describe 'Invoking Publish-GuestConfigurationPackage with minimal parameters' {
                     return @{FullName = "$script:MockConfigPath" }
                 } else {
                     # For MOF file requests, return the expected localhost.mof path
-                    return @{FullName = "$pwd\SimpleDscConfiguration\localhost.mof" }
+                    return @{FullName = "$pwd\SimpleDscConfigurationMock\localhost.mof" }
                 }
             }
             Mock Get-Content { return $sampleConfiguration }
-            Mock Join-Path { return "$pwd\SimpleDscConfiguration\SimpleDscConfiguration.mof" }
+            Mock Join-Path { return "$pwd\SimpleDscConfigurationMock\SimpleDscConfigurationMock.mof" }
             Mock Rename-Item {}
-            Mock New-GuestConfigurationPackage { return @{Path = "$pwd\SimpleDscConfiguration.zip" } }
+            Mock New-GuestConfigurationPackage { return @{Path = "$pwd\SimpleDscConfigurationMock.zip" } }
             Mock Test-Path { return $true }
             Mock Remove-Item {}
             Mock Get-FileHash { return 'EFE785C0BFD22E7A44285BB1D9725C3AE06B9110CCA40D568BAFA9B5D824506B' }
@@ -106,23 +107,23 @@ Describe 'Invoking Publish-GuestConfigurationPackage with minimal parameters' {
         }
 
         It 'should call Join-Path with the path to predict the path of the final MOF file' {
-            Should -CommandName Join-Path -Exactly 1 -ParameterFilter { $ChildPath -eq 'SimpleDscConfiguration' -and $AdditionalChildPath -eq 'SimpleDscConfiguration.mof' }
+            Should -CommandName Join-Path -Exactly 1 -ParameterFilter { $ChildPath -eq 'SimpleDscConfigurationMock' -and $AdditionalChildPath -eq 'SimpleDscConfigurationMock.mof' }
         }
 
         It 'should call Rename-Item to rename the MOF file' {
-            Should -CommandName Rename-Item -Exactly 1 -ParameterFilter { $Path -eq "$pwd\SimpleDscConfiguration\localhost.mof" -and $NewName -eq 'SimpleDscConfiguration.mof' }
+            Should -CommandName Rename-Item -Exactly 1 -ParameterFilter { $Path -eq "$pwd\SimpleDscConfigurationMock\localhost.mof" -and $NewName -eq 'SimpleDscConfigurationMock.mof' }
         }
 
         It 'should call New-GuestConfigurationPackage to create the package' {
-            Should -CommandName New-GuestConfigurationPackage -Exactly 1 -ParameterFilter { $Name -eq 'SimpleDscConfiguration' -and $Configuration -like '*\SimpleDscConfiguration\SimpleDscConfiguration.mof' }
+            Should -CommandName New-GuestConfigurationPackage -Exactly 1 -ParameterFilter { $Name -eq 'SimpleDscConfigurationMock' -and $Configuration -like '*\SimpleDscConfigurationMock\SimpleDscConfigurationMock.mof' }
         }
 
         It 'should call Remove-Item to clean up the temporary files' {
-            Should -CommandName Remove-Item -Exactly 1 -ParameterFilter { $Path -eq "$pwd\SimpleDscConfiguration" -and $Force -eq $true -and $Recurse -eq $true }
+            Should -CommandName Remove-Item -Exactly 1 -ParameterFilter { $Path -eq "$pwd\SimpleDscConfigurationMock" -and $Force -eq $true -and $Recurse -eq $true }
         }
 
         It 'should call Get-FileHash to calculate the hash of the created package' {
-            Should -CommandName Get-FileHash -Exactly 1 -ParameterFilter { $Path -eq "$pwd\SimpleDscConfiguration.zip" }
+            Should -CommandName Get-FileHash -Exactly 1 -ParameterFilter { $Path -eq "$pwd\SimpleDscConfigurationMock.zip" }
         }
 
         It 'should call Test-ConfigurationFileSizeOnDisk to validate the size of the created package' {
@@ -144,7 +145,7 @@ Describe 'Invoking Publish-GuestConfigurationPackage with minimal parameters' {
         }
         It 'should throw an error if it finds multiple configurations in the configuration file' {
             # Need to mock Get-Content before calling the function
-            Mock Get-Content { return @("Configuration SimpleDscConfiguration {}", "Configuration AnotherConfiguration {}") }
+            Mock Get-Content { return @("Configuration SimpleDscConfigurationMock {}", "Configuration AnotherConfiguration {}") }
             { Publish-GuestConfigurationPackage -Configuration "$script:MockConfigPath" } | Should -Throw "Found multiple configurations in configuration file: *"
         }
         It 'should throw an error if it fails to detect configurations in the configuration file' {
@@ -157,8 +158,8 @@ Describe 'Invoking Publish-GuestConfigurationPackage with minimal parameters' {
         }
         It 'should throw an error if it fails to create the GuestConfigurationPackage' {
             Mock New-GuestConfigurationPackage { return @{ Path = $null } }
-            # The error message uses $configurationFile.BaseName which is SimpleDscConfigurationTest
-            { Publish-GuestConfigurationPackage -Configuration "$script:TestConfigPath" } | Should -Throw "Failed to create package for configuration: SimpleDscConfigurationTest"
+            # The error message uses $configurationFile.BaseName which is SimpleDscConfiguration
+            { Publish-GuestConfigurationPackage -Configuration "$script:TestConfigPath" } | Should -Throw "Failed to create package for configuration: SimpleDscConfiguration"
         }
         AfterEach {
             Remove-Item -Path "$pwd\SimpleDscConfiguration" -Force -ErrorAction SilentlyContinue -Recurse
@@ -392,22 +393,22 @@ Describe 'Invoking Publish-GuestConfigurationPackage with deeply nested Configur
                                 secretNamePrefix = 'other-prefix'
                             }
                         )
-                        AllNodes = @()
                     }
+                    AllNodes = @()
                 }
             }
             
             # Capture verbose output
-            $verboseOutput = Publish-GuestConfigurationPackage -Configuration "$script:TestConfigPath" -ConfigurationParameters $deeplyNestedParams -Verbose 4>&1
+            $verboseOutput = Publish-GuestConfigurationPackage -Configuration "$script:TestWithParametersConfigPath" -ConfigurationParameters $deeplyNestedParams -Verbose 4>&1
             
             # Check that no truncation warning appears in the verbose output
             $verboseOutput | Where-Object { $_ -match 'truncated as serialization has exceeded the set depth' } | Should -BeNullOrEmpty
         }
         
         AfterEach {
-            Remove-Item -Path "$pwd\SimpleDscConfiguration.zip" -Force -ErrorAction SilentlyContinue
+            Remove-Item -Path "$pwd\SimpleDscConfigurationWithParameters.zip" -Force -ErrorAction SilentlyContinue
             Remove-Item -Path "$pwd\gch_staging" -Force -ErrorAction SilentlyContinue -Recurse
-            Remove-Item -Path "$pwd\SimpleDscConfiguration" -Force -ErrorAction SilentlyContinue -Recurse
+            Remove-Item -Path "$pwd\SimpleDscConfigurationWithParameters" -Force -ErrorAction SilentlyContinue -Recurse
         }
     }
 }
