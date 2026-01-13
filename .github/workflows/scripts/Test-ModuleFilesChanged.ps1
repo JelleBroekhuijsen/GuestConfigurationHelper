@@ -173,8 +173,8 @@ if ([string]::IsNullOrEmpty($changedFilesJson)) {
 }
 Write-Host "  changed_files: $changedFilesJson" -ForegroundColor Gray
 
-echo "module_files_changed=$moduleFilesChanged" >> $env:GITHUB_OUTPUT
-echo "changed_files=$changedFilesJson" >> $env:GITHUB_OUTPUT
+"module_files_changed=$moduleFilesChanged" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+"changed_files=$changedFilesJson" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
 
 Write-Host ""
 Write-Host "✓ Module file change check complete" -ForegroundColor Green
