@@ -406,9 +406,9 @@ Describe 'Invoking Publish-GuestConfigurationPackage with deeply nested Configur
         }
         
         AfterEach {
-            Remove-Item -Path "$pwd\SimpleDscConfiguration.zip" -Force -ErrorAction SilentlyContinue
+            Remove-Item -Path "$pwd\SimpleDscConfigurationWithParameters.zip" -Force -ErrorAction SilentlyContinue
             Remove-Item -Path "$pwd\gch_staging" -Force -ErrorAction SilentlyContinue -Recurse
-            Remove-Item -Path "$pwd\SimpleDscConfiguration" -Force -ErrorAction SilentlyContinue -Recurse
+            Remove-Item -Path "$pwd\SimpleDscConfigurationWithParameters" -Force -ErrorAction SilentlyContinue -Recurse
         }
     }
 }
