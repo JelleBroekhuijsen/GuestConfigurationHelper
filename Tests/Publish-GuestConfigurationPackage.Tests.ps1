@@ -83,13 +83,13 @@ Describe 'Invoking Publish-GuestConfigurationPackage with minimal parameters' {
                     return @{FullName = "$script:MockConfigPath" }
                 } else {
                     # For MOF file requests, return the expected localhost.mof path
-                    return @{FullName = "$pwd\SimpleDscConfiguration\localhost.mof" }
+                    return @{FullName = "$pwd\SimpleDscConfigurationMock\localhost.mof" }
                 }
             }
             Mock Get-Content { return $sampleConfiguration }
-            Mock Join-Path { return "$pwd\SimpleDscConfiguration\SimpleDscConfiguration.mof" }
+            Mock Join-Path { return "$pwd\SimpleDscConfigurationMock\SimpleDscConfigurationMock.mof" }
             Mock Rename-Item {}
-            Mock New-GuestConfigurationPackage { return @{Path = "$pwd\SimpleDscConfiguration.zip" } }
+            Mock New-GuestConfigurationPackage { return @{Path = "$pwd\SimpleDscConfigurationMock.zip" } }
             Mock Test-Path { return $true }
             Mock Remove-Item {}
             Mock Get-FileHash { return 'EFE785C0BFD22E7A44285BB1D9725C3AE06B9110CCA40D568BAFA9B5D824506B' }
@@ -107,15 +107,15 @@ Describe 'Invoking Publish-GuestConfigurationPackage with minimal parameters' {
         }
 
         It 'should call Join-Path with the path to predict the path of the final MOF file' {
-            Should -CommandName Join-Path -Exactly 1 -ParameterFilter { $ChildPath -eq 'SimpleDscConfigurationMock' -and $AdditionalChildPath -eq 'SimpleDscConfiguration.mof' }
+            Should -CommandName Join-Path -Exactly 1 -ParameterFilter { $ChildPath -eq 'SimpleDscConfigurationMock' -and $AdditionalChildPath -eq 'SimpleDscConfigurationMock.mof' }
         }
 
         It 'should call Rename-Item to rename the MOF file' {
-            Should -CommandName Rename-Item -Exactly 1 -ParameterFilter { $Path -eq "$pwd\SimpleDscConfigurationMock\localhost.mof" -and $NewName -eq 'SimpleDscConfiguration.mof' }
+            Should -CommandName Rename-Item -Exactly 1 -ParameterFilter { $Path -eq "$pwd\SimpleDscConfigurationMock\localhost.mof" -and $NewName -eq 'SimpleDscConfigurationMock.mof' }
         }
 
         It 'should call New-GuestConfigurationPackage to create the package' {
-            Should -CommandName New-GuestConfigurationPackage -Exactly 1 -ParameterFilter { $Name -eq 'SimpleDscConfigurationMock' -and $Configuration -like '*\SimpleDscConfiguration\SimpleDscConfiguration.mof' }
+            Should -CommandName New-GuestConfigurationPackage -Exactly 1 -ParameterFilter { $Name -eq 'SimpleDscConfigurationMock' -and $Configuration -like '*\SimpleDscConfigurationMock\SimpleDscConfigurationMock.mof' }
         }
 
         It 'should call Remove-Item to clean up the temporary files' {
@@ -158,8 +158,8 @@ Describe 'Invoking Publish-GuestConfigurationPackage with minimal parameters' {
         }
         It 'should throw an error if it fails to create the GuestConfigurationPackage' {
             Mock New-GuestConfigurationPackage { return @{ Path = $null } }
-            # The error message uses $configurationFile.BaseName which is SimpleDscConfigurationTest
-            { Publish-GuestConfigurationPackage -Configuration "$script:TestConfigPath" } | Should -Throw "Failed to create package for configuration: SimpleDscConfigurationTest"
+            # The error message uses $configurationFile.BaseName which is SimpleDscConfiguration
+            { Publish-GuestConfigurationPackage -Configuration "$script:TestConfigPath" } | Should -Throw "Failed to create package for configuration: SimpleDscConfiguration"
         }
         AfterEach {
             Remove-Item -Path "$pwd\SimpleDscConfiguration" -Force -ErrorAction SilentlyContinue -Recurse
