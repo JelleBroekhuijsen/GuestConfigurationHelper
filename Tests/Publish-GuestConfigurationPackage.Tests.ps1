@@ -380,18 +380,16 @@ Describe 'Invoking Publish-GuestConfigurationPackage with deeply nested Configur
                     NonNodeData = @{
                         sentinelTenants = @(
                             @{
-                                connectWiseCompanyId = 'TST001'
                                 ensure = 'Present'
-                                azureTenantId = 'infrastructure@newemail.co.za'
-                                azureKeyVaultName = 'kvsenprdzanfilm01'
-                                secretNamePrefix = 'tst-dev'
+                                azureTenantId = 'tenant1.onmicrosoft.com'
+                                azureKeyVaultName = 'mykeyvault01'
+                                secretNamePrefix = 'some-prefix'
                             },
                             @{
-                                connectWiseCompanyId = 'ACU004'
                                 ensure = 'Present'
-                                azureTenantId = 'acumentgroupsa.onmicrosoft.com'
-                                azureKeyVaultName = 'kvsenprdzanfilm01'
-                                secretNamePrefix = 'acu-prd'
+                                azureTenantId = 'tenant2.onmicrosoft.com'
+                                azureKeyVaultName = 'mykeyvault02'
+                                secretNamePrefix = 'other-prefix'
                             }
                         )
                         AllNodes = @()
