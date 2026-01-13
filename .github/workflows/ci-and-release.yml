@@ -13,9 +13,25 @@ permissions:
 jobs:
   test-and-analyze:
     runs-on: windows-latest
+    outputs:
+      module_files_changed: ${{ steps.check-module-files.outputs.module_files_changed }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for module file changes
+        id: check-module-files
+        shell: pwsh
+        run: ./.github/workflows/scripts/Test-ModuleFilesChanged.ps1
+
+      - name: Validate module version bump
+        if: steps.check-module-files.outputs.module_files_changed == 'true'
+        shell: pwsh
+        run: |
+          ./.github/workflows/scripts/Test-ModuleVersionBump.ps1 `
+            -ModuleFilesChanged "${{ steps.check-module-files.outputs.module_files_changed }}"
 
       - name: Install required PowerShell modules
         shell: pwsh
@@ -39,7 +55,7 @@ jobs:
   create-release:
     needs: test-and-analyze
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.test-and-analyze.outputs.module_files_changed == 'true'
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
