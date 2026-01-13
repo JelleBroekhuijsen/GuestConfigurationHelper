@@ -13,4 +13,8 @@ Write-Host "Installing PSScriptAnalyzer..." -ForegroundColor Cyan
 Install-Module -Name PSScriptAnalyzer -Force -Scope CurrentUser
 Write-Host "Installing PSDscResources..." -ForegroundColor Cyan
 Install-Module -Name PSDscResources -Force -Scope CurrentUser
+Write-Host "Installing PSDesiredStateConfiguration..." -ForegroundColor Cyan
+Install-Module -Name PSDesiredStateConfiguration -Force -Scope CurrentUser
+Write-Host "Installing GuestConfiguration..." -ForegroundColor Cyan
+Install-Module -Name GuestConfiguration -Force -Scope CurrentUser
 Write-Host "✓ Modules installed" -ForegroundColor Green
