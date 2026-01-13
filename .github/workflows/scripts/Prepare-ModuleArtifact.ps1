@@ -39,7 +39,8 @@ Write-Host ""
 $filesToCopy = @(
   "$ModuleName.psd1",
   "$ModuleName.psm1",
-  "Helpers.ps1"
+  "Helpers.ps1",
+  "README.md"
 )
 
 $requiredFiles = @("$ModuleName.psd1", "$ModuleName.psm1")
