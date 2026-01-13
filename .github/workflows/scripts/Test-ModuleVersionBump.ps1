@@ -45,6 +45,8 @@ Write-Host "Module files changed - validating version bump..." -ForegroundColor 
 Write-Host ""
 
 # Determine base ref if not provided
+# Note: This logic is duplicated in Test-ModuleFilesChanged.ps1
+# If more scripts need this, consider extracting to a shared function
 if ([string]::IsNullOrEmpty($BaseRef)) {
     Write-Host "No base ref provided, detecting base ref..." -ForegroundColor Gray
     try {

@@ -38,6 +38,8 @@ Write-Host "Checking for Module File Changes" -ForegroundColor Cyan
 Write-Host "================================================" -ForegroundColor Cyan
 
 # Determine base ref if not provided
+# Note: This logic is duplicated in Test-ModuleVersionBump.ps1
+# If more scripts need this, consider extracting to a shared function
 if ([string]::IsNullOrEmpty($BaseRef)) {
     Write-Host "No base ref provided, detecting base ref..." -ForegroundColor Gray
     try {
@@ -112,6 +114,7 @@ $modulePatterns = @(
 )
 
 # Check for README.md (case-insensitive)
+# Note: -match is case-insensitive by default in PowerShell
 $readmePattern = '^readme\.md$'
 
 # Filter for module-relevant files
@@ -119,8 +122,8 @@ $moduleFiles = @()
 foreach ($file in $changedFilesArray) {
     $isModuleFile = $false
     
-    # Check README.md (case-insensitive)
-    if ($file -match $readmePattern) {
+    # Check README.md (case-insensitive match)
+    if ($file -imatch $readmePattern) {
         $isModuleFile = $true
     }
     
