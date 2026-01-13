@@ -54,3 +54,11 @@ Publish-GuestConfigurationPackage -Configuration "C:\path\to\your\configuration.
 - [V] Add support for detecting and warning about too large Guest Configuration packages
 - [V] Add support for reducing dependency size of Guest Configuration packages
 
+## Contributing
+
+We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on:
+- Version bump requirements for module changes
+- Pull request process
+- Code standards and testing
+- How the CI/Release pipeline works
+
