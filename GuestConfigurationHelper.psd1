@@ -4,7 +4,7 @@
   RootModule           = 'GuestConfigurationHelper.psm1'
 
   # Version number of this module.
-  ModuleVersion        = '1.5.1'
+  ModuleVersion        = '1.5.2'
 
   # Supported PSEditions
   CompatiblePSEditions = @('Core')
