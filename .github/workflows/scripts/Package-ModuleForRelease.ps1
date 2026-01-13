@@ -66,11 +66,11 @@ Write-Host ""
 Write-Host "Creating zip archive..." -ForegroundColor Cyan
 
 try {
-  # Compress the module folder itself to maintain proper directory structure on extraction
+  # Compress from within the publish directory to avoid nested structure
   $currentLocation = Get-Location
   try {
     Set-Location $publishDir
-    Compress-Archive -Path $ModuleName -DestinationPath "$env:GITHUB_WORKSPACE/$zipName" -Force -ErrorAction Stop
+    Compress-Archive -Path "$ModuleName/*" -DestinationPath "$env:GITHUB_WORKSPACE/$zipName" -Force -ErrorAction Stop
   }
   finally {
     # Ensure we always restore the location, even if Compress-Archive fails
