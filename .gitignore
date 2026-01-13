@@ -12,3 +12,4 @@ publish/
 *.psd1.backup
 *.psm1.backup
 .claude/settings.local.json
+tmpclaude*
