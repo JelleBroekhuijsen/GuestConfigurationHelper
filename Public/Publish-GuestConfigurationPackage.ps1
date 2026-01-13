@@ -86,10 +86,11 @@ function Publish-GuestConfigurationPackage {
     }
     
     process {
-        . $configurationFile.FullName
         if ($ConfigurationParameters) {
+            . $configurationFile.FullName @ConfigurationParameters
             & $configurationName @ConfigurationParameters -ErrorAction Stop
         } else {
+            . $configurationFile.FullName
             & $configurationName -ErrorAction Stop
         }
         

@@ -4,7 +4,8 @@ BeforeAll {
     . $PSScriptRoot\..\Private\Compress-ConfigurationFileSizeOnDisk.ps1
 
     # Use test-friendly configuration that doesn't require PSDscResources module
-    $script:TestConfigPath = "$PSScriptRoot\SampleConfigs\SimpleDscConfigurationTest.ps1"
+    $script:TestConfigPath = "$PSScriptRoot\SampleConfigs\SimpleDscConfiguration.ps1"
+    $script:TestWithParametersConfigPath = "$PSScriptRoot\SampleConfigs\SimpleDscConfigurationWithParameters.ps1"
     # Mock-friendly configuration for cmdlet invocation tests (does no file I/O when dot-sourced)
     $script:MockConfigPath = "$PSScriptRoot\SampleConfigs\SimpleDscConfigurationMock.ps1"
 
@@ -392,13 +393,13 @@ Describe 'Invoking Publish-GuestConfigurationPackage with deeply nested Configur
                                 secretNamePrefix = 'other-prefix'
                             }
                         )
-                        AllNodes = @()
                     }
+                    AllNodes = @()
                 }
             }
             
             # Capture verbose output
-            $verboseOutput = Publish-GuestConfigurationPackage -Configuration "$script:TestConfigPath" -ConfigurationParameters $deeplyNestedParams -Verbose 4>&1
+            $verboseOutput = Publish-GuestConfigurationPackage -Configuration "$script:TestWithParametersConfigPath" -ConfigurationParameters $deeplyNestedParams -Verbose 4>&1
             
             # Check that no truncation warning appears in the verbose output
             $verboseOutput | Where-Object { $_ -match 'truncated as serialization has exceeded the set depth' } | Should -BeNullOrEmpty
