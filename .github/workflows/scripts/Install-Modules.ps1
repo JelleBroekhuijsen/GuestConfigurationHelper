@@ -8,9 +8,9 @@
 #>
 
 Write-Host "Installing Pester..." -ForegroundColor Cyan
-Install-Module -Name Pester -Force -SkipPublisherCheck -Scope CurrentUser
+Install-Module -Name Pester -Force -Scope CurrentUser
 Write-Host "Installing PSScriptAnalyzer..." -ForegroundColor Cyan
-Install-Module -Name PSScriptAnalyzer -Force -SkipPublisherCheck -Scope CurrentUser
+Install-Module -Name PSScriptAnalyzer -Force -Scope CurrentUser
 Write-Host "Installing PSDscResources..." -ForegroundColor Cyan
-Install-Module -Name PSDscResources -Force -SkipPublisherCheck -Scope CurrentUser
+Install-Module -Name PSDscResources -Force -Scope CurrentUser
 Write-Host "✓ Modules installed" -ForegroundColor Green

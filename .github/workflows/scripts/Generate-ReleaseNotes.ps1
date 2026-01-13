@@ -60,9 +60,9 @@ $notes = @"
 $commits
 
 ### Installation
-``````powershell
+```powershell
 Install-Module -Name GuestConfigurationHelper -RequiredVersion $Version
-``````
+```
 "@
 
 # Write to file to preserve multiline content
