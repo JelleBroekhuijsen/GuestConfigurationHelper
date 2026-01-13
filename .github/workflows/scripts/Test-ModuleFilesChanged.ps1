@@ -54,7 +54,7 @@ if ([string]::IsNullOrEmpty($BaseRef)) {
         }
         
         # Check if origin/main exists
-        $remoteBranchExists = git rev-parse --verify origin/main 2>&1
+        git rev-parse --verify origin/main 2>&1 | Out-Null
         if ($LASTEXITCODE -eq 0) {
             # Try merge-base first
             $BaseRef = git merge-base HEAD origin/main 2>&1
