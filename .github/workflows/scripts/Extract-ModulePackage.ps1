@@ -20,6 +20,7 @@ Write-Host "Extracting Module Package" -ForegroundColor Cyan
 Write-Host "================================================" -ForegroundColor Cyan
 
 Write-Host "Archive file: $AssetName" -ForegroundColor Gray
+Write-Host "Working directory: $env:GITHUB_WORKSPACE" -ForegroundColor Gray
 
 # Verify archive exists
 if (-not (Test-Path $AssetName)) {
@@ -32,15 +33,15 @@ $archiveSize = (Get-Item $AssetName).Length
 Write-Host "Archive size: $([math]::Round($archiveSize / 1KB, 2)) KB" -ForegroundColor Gray
 Write-Host ""
 
-Write-Host "Extracting archive..." -ForegroundColor Cyan
+Write-Host "Extracting archive to: $env:GITHUB_WORKSPACE" -ForegroundColor Cyan
 
 try {
-  Expand-Archive -Path $AssetName -DestinationPath . -Force
+  Expand-Archive -Path $AssetName -DestinationPath $env:GITHUB_WORKSPACE -Force
   Write-Host "✓ Archive extracted successfully" -ForegroundColor Green
   Write-Host ""
   
   Write-Host "Extracted contents:" -ForegroundColor Cyan
-  Get-ChildItem -Force | Format-Table Name, Length, LastWriteTime
+  Get-ChildItem $env:GITHUB_WORKSPACE -Force | Format-Table Name, Length, LastWriteTime
 }
 catch {
   Write-Host "##[error]Failed to extract archive!" -ForegroundColor Red
