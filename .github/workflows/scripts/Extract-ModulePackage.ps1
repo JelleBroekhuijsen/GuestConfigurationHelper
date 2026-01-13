@@ -41,7 +41,7 @@ try {
   Write-Host ""
   
   Write-Host "Extracted contents:" -ForegroundColor Cyan
-  Get-ChildItem $env:GITHUB_WORKSPACE -Force | Format-Table Name, Length, LastWriteTime
+  Get-ChildItem $env:GITHUB_WORKSPACE -Force -Recurse | Format-Table Name, Length, LastWriteTime
 }
 catch {
   Write-Host "##[error]Failed to extract archive!" -ForegroundColor Red
