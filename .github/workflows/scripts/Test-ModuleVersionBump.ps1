@@ -53,6 +53,9 @@ if ([string]::IsNullOrEmpty($BaseRef)) {
         # Try to fetch origin/main
         $fetchResult = git fetch origin main 2>&1
         $fetchExitCode = $LASTEXITCODE
+        if ($fetchExitCode -ne 0) {
+            Write-Host "##[warning]Failed to fetch origin/main (exit code $fetchExitCode): $fetchResult" -ForegroundColor Yellow
+        }
         
         # Check if origin/main exists
         $remoteBranchExists = git rev-parse --verify origin/main 2>&1
