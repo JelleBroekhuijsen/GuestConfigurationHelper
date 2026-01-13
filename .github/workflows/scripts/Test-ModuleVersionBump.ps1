@@ -166,7 +166,7 @@ try {
         # Calculate the difference
         $majorDiff = $currentVersionObj.Major - $baseVersionObj.Major
         $minorDiff = $currentVersionObj.Minor - $baseVersionObj.Minor
-        $buildDiff = $currentVersionObj.Build - $baseVersionObj.Build
+        $patchDiff = $currentVersionObj.Build - $baseVersionObj.Build
         
         Write-Host ""
         Write-Host "  Change type: " -NoNewline -ForegroundColor Gray
