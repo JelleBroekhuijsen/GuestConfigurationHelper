@@ -1,6 +1,7 @@
 # GuestConfigurationHelper
 
 [![CI and Release](https://github.com/JelleBroekhuijsen/GuestConfigurationHelper/actions/workflows/ci-and-release.yml/badge.svg)](https://github.com/JelleBroekhuijsen/GuestConfigurationHelper/actions/workflows/ci-and-release.yml)
+[![PR CI](https://github.com/JelleBroekhuijsen/GuestConfigurationHelper/actions/workflows/pr-ci.yml/badge.svg)](https://github.com/JelleBroekhuijsen/GuestConfigurationHelper/actions/workflows/pr-ci.yml)
 [![PowerShell Gallery Version](https://img.shields.io/powershellgallery/v/GuestConfigurationHelper?label=PS%20Gallery)](https://www.powershellgallery.com/packages/GuestConfigurationHelper)
 [![PowerShell Gallery Downloads](https://img.shields.io/powershellgallery/dt/GuestConfigurationHelper)](https://www.powershellgallery.com/packages/GuestConfigurationHelper)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE.md)
@@ -178,7 +179,8 @@ Install-Module PSDesiredStateConfiguration, PSDscResources, GuestConfiguration -
 
 The badges at the top of this README provide quick status information:
 
-- **CI and Release** - Shows the status of automated tests and build processes. Click to view detailed workflow runs.
+- **CI and Release** - Shows the status of automated tests and build processes on the main branch. Click to view detailed workflow runs.
+- **PR CI** - Shows the status of pull request checks including code coverage validation.
 - **PS Gallery Version** - Displays the latest version available on PowerShell Gallery.
 - **PS Gallery Downloads** - Shows total download count from PowerShell Gallery.
 - **License** - Indicates the project license (MIT).
@@ -211,12 +213,15 @@ We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guid
 - Code standards and testing
 - How the CI/Release pipeline works
 
+For detailed information about testing and CI/CD workflows, see [CI_CD_GUIDE.md](CI_CD_GUIDE.md).
+
 ## 📚 Additional Resources
 
 - [Azure Guest Configuration Documentation](https://learn.microsoft.com/en-us/azure/governance/machine-configuration/overview)
 - [PowerShell Gallery Package](https://www.powershellgallery.com/packages/GuestConfigurationHelper)
 - [GitHub Actions Workflows](https://github.com/JelleBroekhuijsen/GuestConfigurationHelper/actions)
 - [Release Notes](https://github.com/JelleBroekhuijsen/GuestConfigurationHelper/releases)
+- [CI/CD Testing Guide](CI_CD_GUIDE.md)
 
 ## 📄 License
 
