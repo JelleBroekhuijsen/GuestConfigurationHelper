@@ -4,6 +4,10 @@ NewName/
 *.zip
 gch_staging/
 GCH_Staging/
+testResults.xml
+coverage.xml
+TestModules/
+CustomStaging/
 
 # Build artifacts
 publish/
