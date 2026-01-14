@@ -11,8 +11,8 @@ permissions:
   pull-requests: read
 
 jobs:
-  test-and-analyze:
-    runs-on: windows-latest
+  check-changes:
+    runs-on: ubuntu-latest
     outputs:
       module_files_changed: ${{ steps.check-module-files.outputs.module_files_changed }}
     steps:
@@ -33,29 +33,17 @@ jobs:
           ./.github/workflows/scripts/Test-ModuleVersionBump.ps1 `
             -ModuleFilesChanged "${{ steps.check-module-files.outputs.module_files_changed }}"
 
-      - name: Install required PowerShell modules
-        shell: pwsh
-        run: ./.github/workflows/scripts/Install-Modules.ps1
-
-      - name: Run PSScriptAnalyzer
-        shell: pwsh
-        run: ./.github/workflows/scripts/Run-PSScriptAnalyzer.ps1
-
-      - name: Run Pester tests
-        shell: pwsh
-        run: ./.github/workflows/scripts/Run-PesterTests.ps1
-
-      - name: Upload test results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-results
-          path: testResults.xml
+  test-and-analyze:
+    needs: check-changes
+    uses: ./.github/workflows/test-and-analyze.yml
+    with:
+      upload-coverage: false
+      coverage-threshold: 80
 
   create-release:
-    needs: test-and-analyze
+    needs: [check-changes, test-and-analyze]
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.test-and-analyze.outputs.module_files_changed == 'true'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.check-changes.outputs.module_files_changed == 'true'
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4

@@ -1,0 +1,123 @@
+name: Test and Analyze (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      upload-coverage:
+        description: 'Whether to upload coverage reports'
+        required: false
+        type: boolean
+        default: false
+      coverage-threshold:
+        description: 'Minimum code coverage percentage required'
+        required: false
+        type: number
+        default: 80
+
+jobs:
+  test-and-analyze:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install required PowerShell modules
+        shell: pwsh
+        run: ./.github/workflows/scripts/Install-Modules.ps1
+
+      - name: Run PSScriptAnalyzer
+        shell: pwsh
+        run: ./.github/workflows/scripts/Run-PSScriptAnalyzer.ps1
+
+      - name: Run Pester tests with code coverage
+        shell: pwsh
+        run: |
+          Write-Host "Running Pester tests with code coverage..." -ForegroundColor Cyan
+          
+          $config = New-PesterConfiguration
+          $config.Run.Path = './Tests'
+          $config.Run.Exit = $true
+          $config.TestResult.Enabled = $true
+          $config.TestResult.OutputPath = 'testResults.xml'
+          $config.Output.Verbosity = 'Detailed'
+          
+          # Enable code coverage
+          $config.CodeCoverage.Enabled = $true
+          $config.CodeCoverage.Path = @('./Public/*.ps1', './Private/*.ps1')
+          $config.CodeCoverage.OutputPath = 'coverage.xml'
+          $config.CodeCoverage.OutputFormat = 'JaCoCo'
+          
+          $result = Invoke-Pester -Configuration $config
+          
+          # Calculate coverage percentage
+          $commandsAnalyzed = $result.CodeCoverage.NumberOfCommandsAnalyzed
+          $commandsExecuted = $result.CodeCoverage.NumberOfCommandsExecuted
+          $commandsMissed = $result.CodeCoverage.NumberOfCommandsMissed
+          
+          if ($commandsAnalyzed -gt 0) {
+              $coveragePercent = [Math]::Round(($commandsExecuted / $commandsAnalyzed) * 100, 2)
+              Write-Host "`nCode Coverage Summary:" -ForegroundColor Cyan
+              Write-Host "  Total Lines: $commandsAnalyzed"
+              Write-Host "  Covered Lines: $commandsExecuted"
+              Write-Host "  Missed Lines: $commandsMissed"
+              Write-Host "  Coverage Percentage: $coveragePercent%" -ForegroundColor $(if ($coveragePercent -ge ${{ inputs.coverage-threshold }}) { 'Green' } else { 'Red' })
+              
+              # Export coverage for use in subsequent steps
+              "COVERAGE_PERCENT=$coveragePercent" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+              "COMMANDS_ANALYZED=$commandsAnalyzed" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+              "COMMANDS_EXECUTED=$commandsExecuted" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+              "COMMANDS_MISSED=$commandsMissed" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+              
+              # Check if coverage meets threshold
+              $threshold = ${{ inputs.coverage-threshold }}
+              if ($coveragePercent -lt $threshold) {
+                  Write-Error "Code coverage ($coveragePercent%) is below the required threshold ($threshold%)"
+                  exit 1
+              } else {
+                  Write-Host "✓ Code coverage meets the required threshold ($threshold%)" -ForegroundColor Green
+              }
+          } else {
+              Write-Warning "No code coverage data available"
+          }
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: testResults.xml
+
+      - name: Upload code coverage report
+        if: always() && inputs.upload-coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: code-coverage
+          path: coverage.xml
+
+      - name: Generate coverage summary
+        if: always() && inputs.upload-coverage
+        shell: pwsh
+        run: |
+          $coveragePercent = $env:COVERAGE_PERCENT
+          $commandsAnalyzed = $env:COMMANDS_ANALYZED
+          $commandsExecuted = $env:COMMANDS_EXECUTED
+          $commandsMissed = $env:COMMANDS_MISSED
+          
+          if ($coveragePercent) {
+              $emoji = if ([double]$coveragePercent -ge ${{ inputs.coverage-threshold }}) { '✅' } else { '❌' }
+              
+              $summary = @"
+          ## $emoji Code Coverage Report
+          
+          | Metric | Value |
+          |--------|-------|
+          | **Coverage** | **${coveragePercent}%** |
+          | Total Lines | $commandsAnalyzed |
+          | Covered Lines | $commandsExecuted |
+          | Missed Lines | $commandsMissed |
+          | Threshold | ${{ inputs.coverage-threshold }}% |
+          
+          "@
+              
+              $summary | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+          }
