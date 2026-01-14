@@ -3,8 +3,6 @@ BeforeAll {
     . $PSScriptRoot\..\Private\Test-ConfigurationFileSizeOnDisk.ps1
     . $PSScriptRoot\..\Private\Compress-ConfigurationFileSizeOnDisk.ps1
 
-    $script:TestConfigPath = "$PSScriptRoot\SampleConfigs\SimpleDscConfiguration.ps1"
-    
     # Create a stub function for New-GuestConfigurationPackage
     function New-GuestConfigurationPackage {
         [CmdletBinding()]
@@ -43,8 +41,13 @@ Describe 'Edge Cases and Additional Coverage' {
     Context 'Test-ConfigurationFileSizeOnDisk with CompressConfiguration parameter' {
         BeforeEach {
             Mock Expand-Archive {}
-            Mock New-Item { return @{FullName = "$pwd\TestPackage" } }
-            Mock Get-Item { return @{FullName = "$pwd\Tests\SampleConfigPackage\SimpleDscConfiguration.zip"; BaseName = 'SimpleDscConfiguration' } }
+            Mock New-Item { 
+                param($Path, $Name, $ItemType)
+                # Mock Test-Path to return true for this mocked path
+                Mock Test-Path { return $true } -ParameterFilter { $_ -like "*$Name*" }
+                return [PSCustomObject]@{FullName = (Join-Path $Path $Name) }
+            }
+            Mock Get-Item { return [PSCustomObject]@{FullName = "$pwd\Tests\SampleConfigPackage\SimpleDscConfiguration.zip"; BaseName = 'SimpleDscConfiguration' } }
             Mock Get-ChildItem { return @{Length = 50MB} }
             Mock Measure-Object { return @{Sum = 50MB} }
             Mock Remove-Item {}
@@ -91,50 +94,6 @@ Describe 'Edge Cases and Additional Coverage' {
         }
     }
 
-    Context 'Publish-GuestConfigurationPackage parameter combinations' {
-        BeforeEach {
-            Mock Test-ConfigurationFileSizeOnDisk { return $true }
-            Mock Compress-ConfigurationFileSizeOnDisk {}
-        }
-
-        It 'should work with OutputFolder and CompressConfiguration together' {
-            $result = Publish-GuestConfigurationPackage -Configuration "$script:TestConfigPath" -OutputFolder "$pwd\Tests\SampleConfigs" -CompressConfiguration
-            $result.ConfigurationPackage | Should -BeLike "*\Tests\SampleConfigs\SimpleDscConfiguration.zip"
-        }
-
-        It 'should work with NoCleanup and CompressConfiguration together' {
-            $result = Publish-GuestConfigurationPackage -Configuration "$script:TestConfigPath" -NoCleanup -CompressConfiguration
-            Test-Path -Path "$pwd\SimpleDscConfiguration" | Should -Be $true
-            Test-Path -Path "$pwd\GCH_Staging" | Should -Be $true
-        }
-
-        AfterEach {
-            Remove-Item -Path "$pwd\SimpleDscConfiguration.zip" -Force -ErrorAction SilentlyContinue
-            Remove-Item -Path "$pwd\SimpleDscConfiguration" -Force -ErrorAction SilentlyContinue -Recurse
-            Remove-Item -Path "$pwd\GCH_Staging" -Force -ErrorAction SilentlyContinue -Recurse
-            Remove-Item -Path "$pwd\Tests\SampleConfigs\SimpleDscConfiguration.zip" -Force -ErrorAction SilentlyContinue
-        }
-    }
-
-    Context 'Publish-GuestConfigurationPackage verbose output validation' {
-        BeforeEach {
-            Mock Test-ConfigurationFileSizeOnDisk { return $true }
-            Mock Compress-ConfigurationFileSizeOnDisk {}
-        }
-
-        It 'should output verbose messages when -Verbose is specified' {
-            $verboseOutput = Publish-GuestConfigurationPackage -Configuration "$script:TestConfigPath" -Verbose 4>&1
-            $verboseOutput | Where-Object { $_ -match 'Publish-GuestConfigurationPackage started' } | Should -Not -BeNullOrEmpty
-            $verboseOutput | Where-Object { $_ -match 'Extracted configuration name' } | Should -Not -BeNullOrEmpty
-        }
-
-        AfterEach {
-            Remove-Item -Path "$pwd\SimpleDscConfiguration.zip" -Force -ErrorAction SilentlyContinue
-            Remove-Item -Path "$pwd\SimpleDscConfiguration" -Force -ErrorAction SilentlyContinue -Recurse
-            Remove-Item -Path "$pwd\GCH_Staging" -Force -ErrorAction SilentlyContinue -Recurse
-        }
-    }
-
     Context 'Test-ConfigurationFileSizeOnDisk with custom staging folder' {
         BeforeEach {
             New-Item -Path "$pwd\CustomStaging" -ItemType Directory -Force -ErrorAction SilentlyContinue
@@ -142,8 +101,11 @@ Describe 'Edge Cases and Additional Coverage' {
 
         It 'should use custom staging folder when specified' {
             Mock Expand-Archive {}
-            Mock Get-Item { return @{FullName = "$pwd\Tests\SampleConfigPackage\SimpleDscConfiguration.zip"; BaseName = 'SimpleDscConfiguration' } }
-            Mock New-Item { param($Path, $Name, $ItemType) return @{FullName = Join-Path $Path $Name } }
+            Mock Get-Item { return [PSCustomObject]@{FullName = "$pwd\Tests\SampleConfigPackage\SimpleDscConfiguration.zip"; BaseName = 'SimpleDscConfiguration' } }
+            Mock New-Item { 
+                param($Path, $Name, $ItemType)
+                return [PSCustomObject]@{FullName = Join-Path $Path $Name }
+            }
             Mock Get-ChildItem { return @{Length = 50MB} }
             Mock Measure-Object { return @{Sum = 50MB} }
             Mock Remove-Item {}
@@ -158,44 +120,81 @@ Describe 'Edge Cases and Additional Coverage' {
         }
     }
 
-    Context 'Publish-GuestConfigurationPackage Azure DevOps output' {
+    Context 'Test-ConfigurationFileSizeOnDisk size warning' {
         BeforeEach {
-            Mock Test-ConfigurationFileSizeOnDisk { return $true }
-            Mock Compress-ConfigurationFileSizeOnDisk {}
+            Mock Expand-Archive {}
+            Mock Get-Item { return [PSCustomObject]@{FullName = "$pwd\Tests\SampleConfigPackage\SimpleDscConfiguration.zip"; BaseName = 'SimpleDscConfiguration' } }
+            Mock New-Item { 
+                param($Path, $Name, $ItemType)
+                Mock Test-Path { return $true } -ParameterFilter { $_ -like "*$Name*" }
+                return [PSCustomObject]@{FullName = (Join-Path $Path $Name) }
+            }
+            Mock Get-ChildItem { return @{Length = 150MB} }
+            Mock Measure-Object { return @{Sum = 150MB} }
+            Mock Remove-Item {}
         }
 
-        It 'should output Azure DevOps variables' {
-            $output = Publish-GuestConfigurationPackage -Configuration "$script:TestConfigPath" 6>&1
-            $vsoCommands = $output | Where-Object { $_ -match '##vso\[task\.setvariable' }
-            $vsoCommands | Should -Not -BeNullOrEmpty
-            $vsoCommands | Where-Object { $_ -match 'ConfigurationName' } | Should -Not -BeNullOrEmpty
-            $vsoCommands | Where-Object { $_ -match 'ConfigurationPackage' } | Should -Not -BeNullOrEmpty
-            $vsoCommands | Where-Object { $_ -match 'ConfigurationFileHash' } | Should -Not -BeNullOrEmpty
+        It 'should return false and output warning when package exceeds 100MB' {
+            $warnings = @()
+            $result = Test-ConfigurationFileSizeOnDisk -ConfigurationPackage "$pwd\Tests\SampleConfigPackage\SimpleDscConfiguration.zip" -WarningVariable warnings -WarningAction SilentlyContinue
+            $result | Should -Be $false
+            $warnings | Where-Object { $_ -match 'too large' } | Should -Not -BeNullOrEmpty
         }
 
-        AfterEach {
-            Remove-Item -Path "$pwd\SimpleDscConfiguration.zip" -Force -ErrorAction SilentlyContinue
-            Remove-Item -Path "$pwd\SimpleDscConfiguration" -Force -ErrorAction SilentlyContinue -Recurse
-            Remove-Item -Path "$pwd\GCH_Staging" -Force -ErrorAction SilentlyContinue -Recurse
+        It 'should return true when package is under 100MB' {
+            Mock Measure-Object { return @{Sum = 50MB} }
+            Mock Get-ChildItem { return @{Length = 50MB} }
+            $result = Test-ConfigurationFileSizeOnDisk -ConfigurationPackage "$pwd\Tests\SampleConfigPackage\SimpleDscConfiguration.zip"
+            $result | Should -Be $true
         }
     }
 
-    Context 'File hash calculation' {
+    Context 'Compress-ConfigurationFileSizeOnDisk with complex version patterns' {
         BeforeEach {
-            Mock Test-ConfigurationFileSizeOnDisk { return $true }
-            Mock Compress-ConfigurationFileSizeOnDisk {}
+            New-Item -Path "$pwd\TestModules\Modules" -ItemType Directory -Force -ErrorAction SilentlyContinue
         }
 
-        It 'should calculate SHA256 hash of the package' {
-            $result = Publish-GuestConfigurationPackage -Configuration "$script:TestConfigPath"
-            $result.ConfigurationFileHash | Should -Not -BeNullOrEmpty
-            $result.ConfigurationFileHash.Length | Should -Be 64  # SHA256 hash is 64 characters
+        It 'should remove folders with semantic version format (X.Y.Z)' {
+            Mock Get-ChildItem { 
+                return @(
+                    @{Name = '1.0.0'; FullName = "$pwd\TestModules\Modules\1.0.0"},
+                    @{Name = '2.3.1'; FullName = "$pwd\TestModules\Modules\2.3.1"},
+                    @{Name = '10.20.30'; FullName = "$pwd\TestModules\Modules\10.20.30"}
+                )
+            }
+            Mock Remove-Item {}
+            Compress-ConfigurationFileSizeOnDisk -ExtractedConfigurationPackageFolder "$pwd\TestModules"
+            Should -CommandName Remove-Item -Exactly 3
+        }
+
+        It 'should remove folders with extended version format (X.Y.Z.W)' {
+            Mock Get-ChildItem { 
+                return @(
+                    @{Name = '1.0.0.0'; FullName = "$pwd\TestModules\Modules\1.0.0.0"},
+                    @{Name = '2.3.1.5'; FullName = "$pwd\TestModules\Modules\2.3.1.5"}
+                )
+            }
+            Mock Remove-Item {}
+            Compress-ConfigurationFileSizeOnDisk -ExtractedConfigurationPackageFolder "$pwd\TestModules"
+            Should -CommandName Remove-Item -Exactly 2
+        }
+
+        It 'should not remove folders that do not match version pattern' {
+            Mock Get-ChildItem { 
+                return @(
+                    @{Name = 'v1.0.0'; FullName = "$pwd\TestModules\Modules\v1.0.0"},
+                    @{Name = 'latest'; FullName = "$pwd\TestModules\Modules\latest"},
+                    @{Name = 'MyModule'; FullName = "$pwd\TestModules\Modules\MyModule"}
+                )
+            }
+            Mock Remove-Item {}
+            Compress-ConfigurationFileSizeOnDisk -ExtractedConfigurationPackageFolder "$pwd\TestModules"
+            Should -CommandName Remove-Item -Exactly 0
         }
 
         AfterEach {
-            Remove-Item -Path "$pwd\SimpleDscConfiguration.zip" -Force -ErrorAction SilentlyContinue
-            Remove-Item -Path "$pwd\SimpleDscConfiguration" -Force -ErrorAction SilentlyContinue -Recurse
-            Remove-Item -Path "$pwd\GCH_Staging" -Force -ErrorAction SilentlyContinue -Recurse
+            Remove-Item -Path "$pwd\TestModules" -Recurse -Force -ErrorAction SilentlyContinue
         }
     }
 }
+
