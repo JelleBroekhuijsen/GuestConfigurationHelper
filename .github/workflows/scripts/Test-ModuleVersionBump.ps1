@@ -50,40 +50,53 @@ Write-Host ""
 if ([string]::IsNullOrEmpty($BaseRef)) {
     Write-Host "No base ref provided, detecting base ref..." -ForegroundColor Gray
     try {
-        # Try to fetch origin/main
-        $fetchResult = git fetch origin main 2>&1
-        $fetchExitCode = $LASTEXITCODE
-        if ($fetchExitCode -ne 0) {
-            Write-Host "##[warning]Failed to fetch origin/main (exit code $fetchExitCode): $fetchResult" -ForegroundColor Yellow
-        }
+        # Check if HEAD is a merge commit (has multiple parents)
+        # This happens when a PR is merged to main
+        $parentCount = (git rev-list --parents -n 1 HEAD 2>&1 | ForEach-Object { $_.Split(' ').Count - 1 })
         
-        # Check if origin/main exists
-        git rev-parse --verify origin/main 2>&1 | Out-Null
-        if ($LASTEXITCODE -eq 0) {
-            # Try merge-base first
-            $BaseRef = git merge-base HEAD origin/main 2>&1
-            if ($LASTEXITCODE -eq 0) {
-                Write-Host "Using merge-base with origin/main: $BaseRef" -ForegroundColor Gray
-            }
-            else {
-                Write-Host "Could not determine merge-base, using origin/main directly" -ForegroundColor Yellow
-                $BaseRef = "origin/main"
-            }
+        if ($parentCount -gt 1) {
+            # HEAD is a merge commit - compare with first parent to get merged changes
+            # This ensures we capture all files from the merged PR
+            $BaseRef = "HEAD^1"
+            Write-Host "Detected merge commit, comparing with first parent: $BaseRef" -ForegroundColor Gray
         }
         else {
-            # Fallback: try main branch directly
-            $mainExists = git rev-parse --verify main 2>&1
+            # HEAD is not a merge commit - use standard merge-base logic
+            # Try to fetch origin/main
+            $fetchResult = git fetch origin main 2>&1
+            $fetchExitCode = $LASTEXITCODE
+            if ($fetchExitCode -ne 0) {
+                Write-Host "##[warning]Failed to fetch origin/main (exit code $fetchExitCode): $fetchResult" -ForegroundColor Yellow
+            }
+            
+            # Check if origin/main exists
+            git rev-parse --verify origin/main 2>&1 | Out-Null
             if ($LASTEXITCODE -eq 0) {
-                Write-Host "Using local main branch as base" -ForegroundColor Yellow
-                $BaseRef = "main"
+                # Try merge-base first
+                $BaseRef = git merge-base HEAD origin/main 2>&1
+                if ($LASTEXITCODE -eq 0) {
+                    Write-Host "Using merge-base with origin/main: $BaseRef" -ForegroundColor Gray
+                }
+                else {
+                    Write-Host "Could not determine merge-base, using origin/main directly" -ForegroundColor Yellow
+                    $BaseRef = "origin/main"
+                }
             }
             else {
-                # Last resort: use HEAD~1 
-                Write-Host "##[warning]Could not find main or origin/main, using HEAD~1" -ForegroundColor Yellow
-                $BaseRef = "HEAD~1"
+                # Fallback: try main branch directly
+                $mainExists = git rev-parse --verify main 2>&1
+                if ($LASTEXITCODE -eq 0) {
+                    Write-Host "Using local main branch as base" -ForegroundColor Yellow
+                    $BaseRef = "main"
+                }
+                else {
+                    # Last resort: use HEAD~1 
+                    Write-Host "##[warning]Could not find main or origin/main, using HEAD~1" -ForegroundColor Yellow
+                    $BaseRef = "HEAD~1"
+                }
             }
+            Write-Host "Base ref: $BaseRef" -ForegroundColor Gray
         }
-        Write-Host "Base ref: $BaseRef" -ForegroundColor Gray
     }
     catch {
         Write-Host "##[error]Failed to determine base ref: $_" -ForegroundColor Red
