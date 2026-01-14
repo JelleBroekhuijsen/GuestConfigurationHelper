@@ -187,6 +187,7 @@ For detailed test results and build logs, visit the [Actions tab](https://github
 
 ## 📝 Release History
 
+- **1.6.0** - Documentation improvements with status badges and comprehensive examples
 - **1.5.2** - Bug fixes and stability improvements
 - **1.5.0** - Improved large configuration object handling and enhanced testing
 - **1.4.0** - Added Azure DevOps output variables and configuration name override support
