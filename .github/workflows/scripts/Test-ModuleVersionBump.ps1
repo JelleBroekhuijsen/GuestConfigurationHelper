@@ -52,7 +52,8 @@ if ([string]::IsNullOrEmpty($BaseRef)) {
     try {
         # Check if HEAD is a merge commit (has multiple parents)
         # This happens when a PR is merged to main
-        $parentCount = (git rev-list --parents -n 1 HEAD 2>&1 | ForEach-Object { $_.Split(' ').Count - 1 })
+        $parents = git cat-file -p HEAD | Select-String '^parent'
+        $parentCount = if ($null -eq $parents) { 0 } elseif ($parents -is [array]) { $parents.Count } else { 1 }
         
         if ($parentCount -gt 1) {
             # HEAD is a merge commit - compare with first parent to get merged changes
