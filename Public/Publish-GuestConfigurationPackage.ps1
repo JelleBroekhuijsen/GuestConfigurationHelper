@@ -21,6 +21,9 @@ function Publish-GuestConfigurationPackage {
     .PARAMETER NoCleanup
         Indicates whether to clean up the temporary files created during the process. Default behavior is to clean up the temporary files.
 
+    .PARAMETER Mode
+        Specifies the Guest Configuration mode. Valid values are 'Audit' (read-only compliance checking) and 'AuditAndSet' (compliance checking with automatic remediation). The default value is 'AuditAndSet' for backward compatibility.
+
     .EXAMPLE
         Publish-GuestConfigurationPackage -Configuration .\SimpleDscConfiguration.ps1
 
@@ -35,6 +38,12 @@ function Publish-GuestConfigurationPackage {
 
     .EXAMPLE
         Publish-GuestConfigurationPackage -Configuration .\SimpleDscConfiguration.ps1 -CompressConfiguration
+
+    .EXAMPLE
+        Publish-GuestConfigurationPackage -Configuration .\SimpleDscConfiguration.ps1 -Mode Audit
+
+    .EXAMPLE
+        Publish-GuestConfigurationPackage -Configuration .\SimpleDscConfiguration.ps1 -Mode AuditAndSet
     #>
     [CmdletBinding()]
     param (
@@ -62,7 +71,12 @@ function Publish-GuestConfigurationPackage {
 
         [Parameter()]
         [string]
-        $OverrideDefaultConfigurationName
+        $OverrideDefaultConfigurationName,
+
+        [Parameter()]
+        [ValidateSet('Audit', 'AuditAndSet')]
+        [string]
+        $Mode = 'AuditAndSet'
     )
     
     begin {
@@ -116,7 +130,8 @@ function Publish-GuestConfigurationPackage {
         Rename-Item -Path $mofFile.FullName -NewName "$($configurationName).mof" -ErrorAction Stop
 
         Write-Verbose "Creating package for configuration '$configurationName'..."
-        $configurationPackage = New-GuestConfigurationPackage -Name $configurationName -Configuration $ConfigurationMofFile -Path $OutputFolder -Type AuditAndSet -Force
+        Write-Verbose "Creating package with Mode: $Mode"
+        $configurationPackage = New-GuestConfigurationPackage -Name $configurationName -Configuration $ConfigurationMofFile -Path $OutputFolder -Type $Mode -Force
         if (-not (Test-Path -Path $configurationPackage.Path -PathType Leaf -ErrorAction SilentlyContinue)) {
             throw "Failed to create package for configuration: $($configurationFile.BaseName)"
         }
