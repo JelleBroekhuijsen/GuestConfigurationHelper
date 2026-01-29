@@ -43,7 +43,7 @@ jobs:
   create-release:
     needs: [check-changes, test-and-analyze]
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.check-changes.outputs.module_files_changed == 'true'
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && needs.check-changes.outputs.module_files_changed == 'true'))
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4

@@ -42,48 +42,61 @@ Write-Host "================================================" -ForegroundColor C
 # If more scripts need this, consider extracting to a shared function
 if ([string]::IsNullOrEmpty($BaseRef)) {
     Write-Host "No base ref provided, detecting base ref..." -ForegroundColor Gray
-    try {
-        # Try to fetch origin/main
-        $fetchResult = git fetch origin main 2>&1
-        $fetchExitCode = $LASTEXITCODE
-        if ($fetchExitCode -ne 0) {
-            Write-Host "##[warning]git fetch origin main failed with exit code $fetchExitCode" -ForegroundColor Yellow
-            if ($null -ne $fetchResult -and $fetchResult -ne "") {
-                Write-Host $fetchResult -ForegroundColor DarkYellow
-            }
-        }
-        
-        # Check if origin/main exists
-        git rev-parse --verify origin/main 2>&1 | Out-Null
-        if ($LASTEXITCODE -eq 0) {
-            # Try merge-base first
-            $BaseRef = git merge-base HEAD origin/main 2>&1
-            if ($LASTEXITCODE -eq 0) {
-                Write-Host "Using merge-base with origin/main: $BaseRef" -ForegroundColor Gray
-            }
-            else {
-                Write-Host "Could not determine merge-base, using origin/main directly" -ForegroundColor Yellow
-                $BaseRef = "origin/main"
-            }
-        }
-        else {
-            # Fallback: try main branch directly
-            $mainExists = git rev-parse --verify main 2>&1
-            if ($LASTEXITCODE -eq 0) {
-                Write-Host "Using local main branch as base" -ForegroundColor Yellow
-                $BaseRef = "main"
-            }
-            else {
-                # Last resort: use HEAD~1 
-                Write-Host "##[warning]Could not find main or origin/main, using HEAD~1" -ForegroundColor Yellow
-                $BaseRef = "HEAD~1"
-            }
-        }
+
+    # Special handling for push to main branch: compare against previous commit
+    # When a PR is merged to main, HEAD and origin/main are the same commit,
+    # so merge-base returns the same commit, resulting in no detected changes.
+    # Instead, we compare against the first parent of HEAD (the previous state of main).
+    if ($env:GITHUB_REF -eq 'refs/heads/main' -and $env:GITHUB_EVENT_NAME -eq 'push') {
+        Write-Host "Detected push to main branch" -ForegroundColor Gray
+        Write-Host "Comparing against previous commit (HEAD~1) to detect merge changes" -ForegroundColor Gray
+        $BaseRef = "HEAD~1"
         Write-Host "Base ref: $BaseRef" -ForegroundColor Gray
     }
-    catch {
-        Write-Host "##[error]Failed to determine base ref: $_" -ForegroundColor Red
-        exit 1
+    else {
+        try {
+            # Try to fetch origin/main
+            $fetchResult = git fetch origin main 2>&1
+            $fetchExitCode = $LASTEXITCODE
+            if ($fetchExitCode -ne 0) {
+                Write-Host "##[warning]git fetch origin main failed with exit code $fetchExitCode" -ForegroundColor Yellow
+                if ($null -ne $fetchResult -and $fetchResult -ne "") {
+                    Write-Host $fetchResult -ForegroundColor DarkYellow
+                }
+            }
+
+            # Check if origin/main exists
+            git rev-parse --verify origin/main 2>&1 | Out-Null
+            if ($LASTEXITCODE -eq 0) {
+                # Try merge-base first
+                $BaseRef = git merge-base HEAD origin/main 2>&1
+                if ($LASTEXITCODE -eq 0) {
+                    Write-Host "Using merge-base with origin/main: $BaseRef" -ForegroundColor Gray
+                }
+                else {
+                    Write-Host "Could not determine merge-base, using origin/main directly" -ForegroundColor Yellow
+                    $BaseRef = "origin/main"
+                }
+            }
+            else {
+                # Fallback: try main branch directly
+                git rev-parse --verify main 2>&1 | Out-Null
+                if ($LASTEXITCODE -eq 0) {
+                    Write-Host "Using local main branch as base" -ForegroundColor Yellow
+                    $BaseRef = "main"
+                }
+                else {
+                    # Last resort: use HEAD~1
+                    Write-Host "##[warning]Could not find main or origin/main, using HEAD~1" -ForegroundColor Yellow
+                    $BaseRef = "HEAD~1"
+                }
+            }
+            Write-Host "Base ref: $BaseRef" -ForegroundColor Gray
+        }
+        catch {
+            Write-Host "##[error]Failed to determine base ref: $_" -ForegroundColor Red
+            exit 1
+        }
     }
 }
 
