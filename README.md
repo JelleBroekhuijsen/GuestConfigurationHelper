@@ -20,6 +20,7 @@ GuestConfigurationHelper is a PowerShell module that simplifies the creation and
   - `ConfigurationPackage` - Path to the created package
   - `ConfigurationFileHash` - SHA256 hash of the package
 - **Custom Configuration Names** - Override default configuration names with the `-OverrideDefaultConfigurationName` parameter
+- **Flexible Configuration Modes** - Choose between Audit (read-only) and AuditAndSet (with remediation) modes
 
 ## 📋 Requirements
 
@@ -98,6 +99,36 @@ Keep temporary files for debugging:
 Publish-GuestConfigurationPackage -Configuration "C:\configs\config.ps1" -NoCleanup -Verbose
 ```
 
+### Configuration Modes
+
+Choose between Audit and AuditAndSet modes based on your compliance needs:
+
+#### Audit Mode (Read-Only)
+
+Creates a configuration package that only checks compliance without making changes:
+
+```powershell
+Publish-GuestConfigurationPackage -Configuration "C:\configs\config.ps1" -Mode Audit
+```
+
+Use Audit mode when you want to:
+- Assess compliance without making changes
+- Generate compliance reports
+- Test configurations before enforcing them
+
+#### AuditAndSet Mode (With Remediation)
+
+Creates a configuration package that checks compliance and automatically remediates non-compliant settings (default):
+
+```powershell
+Publish-GuestConfigurationPackage -Configuration "C:\configs\config.ps1" -Mode AuditAndSet
+```
+
+Use AuditAndSet mode when you want to:
+- Automatically enforce compliance
+- Remediate configuration drift
+- Apply and maintain desired state
+
 ## 📖 Parameters Reference
 
 | Parameter | Type | Required | Description |
@@ -108,6 +139,7 @@ Publish-GuestConfigurationPackage -Configuration "C:\configs\config.ps1" -NoClea
 | `-CompressConfiguration` | Switch | No | Enable experimental package size reduction |
 | `-NoCleanup` | Switch | No | Keep temporary files after package creation |
 | `-OverrideDefaultConfigurationName` | String | No | Use a custom name instead of the configuration name from the file |
+| `-Mode` | String | No | Guest Configuration mode: 'Audit' (read-only) or 'AuditAndSet' (with remediation). Default: 'AuditAndSet' |
 
 ## 🔍 Example DSC Configuration
 
@@ -189,6 +221,7 @@ For detailed test results and build logs, visit the [Actions tab](https://github
 
 ## 📝 Release History
 
+- **1.7.0** - Added support for Audit mode alongside AuditAndSet mode
 - **1.6.0** - Documentation improvements with status badges and comprehensive examples
 - **1.5.2** - Bug fixes and stability improvements
 - **1.5.0** - Improved large configuration object handling and enhanced testing

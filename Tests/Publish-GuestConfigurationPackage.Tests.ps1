@@ -114,8 +114,8 @@ Describe 'Invoking Publish-GuestConfigurationPackage with minimal parameters' {
             Should -CommandName Rename-Item -Exactly 1 -ParameterFilter { $Path -eq "$pwd\SimpleDscConfigurationMock\localhost.mof" -and $NewName -eq 'SimpleDscConfigurationMock.mof' }
         }
 
-        It 'should call New-GuestConfigurationPackage to create the package' {
-            Should -CommandName New-GuestConfigurationPackage -Exactly 1 -ParameterFilter { $Name -eq 'SimpleDscConfigurationMock' -and $Configuration -like '*\SimpleDscConfigurationMock\SimpleDscConfigurationMock.mof' }
+        It 'should call New-GuestConfigurationPackage to create the package with default AuditAndSet type' {
+            Should -CommandName New-GuestConfigurationPackage -Exactly 1 -ParameterFilter { $Name -eq 'SimpleDscConfigurationMock' -and $Configuration -like '*\SimpleDscConfigurationMock\SimpleDscConfigurationMock.mof' -and $Type -eq 'AuditAndSet' }
         }
 
         It 'should call Remove-Item to clean up the temporary files' {
@@ -207,8 +207,8 @@ Describe 'Invoking Publish-GuestConfigurationPackage with the output folder para
             Publish-GuestConfigurationPackage -Configuration "$script:TestConfigPath" -OutputFolder $outputFolder
         }
 
-        It 'should call New-GuestConfigurationPackage to create the package' {
-            Should -CommandName New-GuestConfigurationPackage -Exactly 1 -ParameterFilter { $Name -eq 'SimpleDscConfiguration' -and $Configuration -like '*\SimpleDscConfiguration\SimpleDscConfiguration.mof' -and $Path -like '*\Tests\SampleConfigs' }
+        It 'should call New-GuestConfigurationPackage to create the package with default AuditAndSet type' {
+            Should -CommandName New-GuestConfigurationPackage -Exactly 1 -ParameterFilter { $Name -eq 'SimpleDscConfiguration' -and $Configuration -like '*\SimpleDscConfiguration\SimpleDscConfiguration.mof' -and $Path -like '*\Tests\SampleConfigs' -and $Type -eq 'AuditAndSet' }
         }
 
         AfterEach {
@@ -362,6 +362,101 @@ Describe 'Invoking Publish-GuestConfigurationPackage with the OverrideDefaultCon
 
         AfterAll {
             Remove-Item -Path "$pwd\SimpleDscConfiguration.zip" -Force -ErrorAction SilentlyContinue
+            Remove-Item -Path "$pwd\SimpleDscConfiguration" -Force -ErrorAction SilentlyContinue -Recurse
+        }
+    }
+}
+
+Describe 'Invoking Publish-GuestConfigurationPackage with the Mode parameter' {
+    Context 'testing parameter validation' {
+        BeforeEach {
+            Mock Test-ConfigurationFileSizeOnDisk
+            Mock Compress-ConfigurationFileSizeOnDisk
+        }
+
+        It 'should throw an error if an invalid Mode value is provided' {
+            { Publish-GuestConfigurationPackage -Configuration "$script:TestConfigPath" -Mode 'InvalidMode' } | Should -Throw "*Cannot validate argument on parameter 'Mode'*"
+        }
+
+        It 'should accept Audit as a valid Mode value' {
+            { Publish-GuestConfigurationPackage -Configuration "$script:TestConfigPath" -Mode 'Audit' } | Should -Not -Throw
+        }
+
+        It 'should accept AuditAndSet as a valid Mode value' {
+            { Publish-GuestConfigurationPackage -Configuration "$script:TestConfigPath" -Mode 'AuditAndSet' } | Should -Not -Throw
+        }
+
+        AfterEach {
+            Remove-Item -Path "$pwd\SimpleDscConfiguration.zip" -Force -ErrorAction SilentlyContinue
+            Remove-Item -Path "$pwd\gch_staging" -Force -ErrorAction SilentlyContinue -Recurse
+            Remove-Item -Path "$pwd\SimpleDscConfiguration" -Force -ErrorAction SilentlyContinue -Recurse
+        }
+    }
+
+    Context 'testing cmdlet invocation with Mode parameter' {
+        BeforeEach {
+            $sampleConfiguration = Get-Content -Path $script:MockConfigPath -ErrorAction Stop
+            Mock Get-Item {
+                if ($Path -like '*.ps1') {
+                    return @{FullName = "$script:MockConfigPath" }
+                } else {
+                    return @{FullName = "$pwd\SimpleDscConfigurationMock\localhost.mof" }
+                }
+            }
+            Mock Get-Content { return $sampleConfiguration }
+            Mock Join-Path { return "$pwd\SimpleDscConfigurationMock\SimpleDscConfigurationMock.mof" }
+            Mock Rename-Item {}
+            Mock New-GuestConfigurationPackage { return @{Path = "$pwd\SimpleDscConfigurationMock.zip" } }
+            Mock Test-Path { return $true }
+            Mock Remove-Item {}
+            Mock Get-FileHash { return 'EFE785C0BFD22E7A44285BB1D9725C3AE06B9110CCA40D568BAFA9B5D824506B' }
+            Mock New-Item { return @{FullName = "$pwd\gch_staging" } }
+            Mock Test-ConfigurationFileSizeOnDisk
+            Mock Compress-ConfigurationFileSizeOnDisk
+        }
+
+        It 'should call New-GuestConfigurationPackage with Type Audit when Mode is Audit' {
+            Publish-GuestConfigurationPackage -Configuration "$script:MockConfigPath" -Mode 'Audit'
+            Should -Invoke New-GuestConfigurationPackage -Exactly 1 -ParameterFilter { $Type -eq 'Audit' }
+        }
+
+        It 'should call New-GuestConfigurationPackage with Type AuditAndSet when Mode is AuditAndSet' {
+            Publish-GuestConfigurationPackage -Configuration "$script:MockConfigPath" -Mode 'AuditAndSet'
+            Should -Invoke New-GuestConfigurationPackage -Exactly 1 -ParameterFilter { $Type -eq 'AuditAndSet' }
+        }
+
+        It 'should default to AuditAndSet when Mode is not specified' {
+            Publish-GuestConfigurationPackage -Configuration "$script:MockConfigPath"
+            Should -Invoke New-GuestConfigurationPackage -Exactly 1 -ParameterFilter { $Type -eq 'AuditAndSet' }
+        }
+
+        AfterEach {
+            Remove-Item -Path "$pwd\SimpleDscConfigurationMock.zip" -Force -ErrorAction SilentlyContinue
+            Remove-Item -Path "$pwd\SimpleDscConfigurationMock" -Force -ErrorAction SilentlyContinue -Recurse
+        }
+    }
+
+    Context 'validating results with different modes' {
+        BeforeEach {
+            Mock Test-ConfigurationFileSizeOnDisk
+            Mock Compress-ConfigurationFileSizeOnDisk
+        }
+
+        It 'should create packages successfully with Audit mode' {
+            $result = Publish-GuestConfigurationPackage -Configuration "$script:TestConfigPath" -Mode 'Audit'
+            $result.ConfigurationPackage | Should -Not -BeNullOrEmpty
+            Test-Path -Path $result.ConfigurationPackage -PathType Leaf | Should -Be $true
+        }
+
+        It 'should create packages successfully with AuditAndSet mode' {
+            $result = Publish-GuestConfigurationPackage -Configuration "$script:TestConfigPath" -Mode 'AuditAndSet'
+            $result.ConfigurationPackage | Should -Not -BeNullOrEmpty
+            Test-Path -Path $result.ConfigurationPackage -PathType Leaf | Should -Be $true
+        }
+
+        AfterEach {
+            Remove-Item -Path "$pwd\SimpleDscConfiguration.zip" -Force -ErrorAction SilentlyContinue
+            Remove-Item -Path "$pwd\gch_staging" -Force -ErrorAction SilentlyContinue -Recurse
             Remove-Item -Path "$pwd\SimpleDscConfiguration" -Force -ErrorAction SilentlyContinue -Recurse
         }
     }
